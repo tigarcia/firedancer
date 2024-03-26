@@ -141,6 +141,8 @@ metric introduced.
 
 <group name="Tile" tile="all">
     <gauge name="Pid" summary="The process ID of the tile." />
+    <counter name="ContextSwitchInvoluntaryCount" summary="The number of involuntary context switches." />
+    <counter name="ContextSwitchVoluntaryCount" summary="The number of voluntary context switches." />
 </group>
 
 <group name="Stem" tile="all">

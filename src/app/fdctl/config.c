@@ -638,18 +638,19 @@ topo_initialize( config_t * config ) {
   fd_topob_wksp( topo, "shred_sign" );
   fd_topob_wksp( topo, "sign_shred" );
 
-  fd_topob_wksp( topo, "net"    );
-  fd_topob_wksp( topo, "netmux" );
-  fd_topob_wksp( topo, "quic"   );
-  fd_topob_wksp( topo, "verify" );
-  fd_topob_wksp( topo, "dedup"  );
-  fd_topob_wksp( topo, "pack"   );
-  fd_topob_wksp( topo, "bank"   );
-  fd_topob_wksp( topo, "poh"    );
-  fd_topob_wksp( topo, "shred"  );
-  fd_topob_wksp( topo, "store"  );
-  fd_topob_wksp( topo, "sign"   );
-  fd_topob_wksp( topo, "metric" );
+  fd_topob_wksp( topo, "net"     );
+  fd_topob_wksp( topo, "netmux"  );
+  fd_topob_wksp( topo, "quic"    );
+  fd_topob_wksp( topo, "verify"  );
+  fd_topob_wksp( topo, "dedup"   );
+  fd_topob_wksp( topo, "pack"    );
+  fd_topob_wksp( topo, "bank"    );
+  fd_topob_wksp( topo, "poh"     );
+  fd_topob_wksp( topo, "shred"   );
+  fd_topob_wksp( topo, "store"   );
+  fd_topob_wksp( topo, "sign"    );
+  fd_topob_wksp( topo, "metric"  );
+  fd_topob_wksp( topo, "cswitch" );
 
   #define FOR(cnt) for( ulong i=0UL; i<cnt; i++ )
 
@@ -695,6 +696,7 @@ topo_initialize( config_t * config ) {
   /**/                 fd_topob_tile( topo, "store",   "store",   "metric_in", "metric_in",  tile_to_cpu[topo->tile_cnt], 1,       NULL,           0UL );
   /**/                 fd_topob_tile( topo, "sign",    "sign",    "metric_in", "metric_in",  tile_to_cpu[topo->tile_cnt], 0,       NULL,           0UL );
   /**/                 fd_topob_tile( topo, "metric",  "metric",  "metric_in", "metric_in",  tile_to_cpu[topo->tile_cnt], 0,       NULL,           0UL );
+  /**/                 fd_topob_tile( topo, "cswitch", "cswitch", "metric_in", "metric_in",  tile_to_cpu[topo->tile_cnt], 0,       NULL,           0UL );
 
   if( FD_UNLIKELY( affinity_tile_cnt<topo->tile_cnt ) )
     FD_LOG_ERR(( "The topology you are using has %lu tiles, but the CPU affinity specified in the config tile as [layout.affinity] only provides for %lu cores. "

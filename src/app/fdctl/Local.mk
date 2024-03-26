@@ -13,7 +13,6 @@ $(call add-objs,monitor/monitor monitor/helper,fd_fdctl)
 
 # fdctl tiles
 $(call add-objs,run/tiles/fd_net,fd_fdctl)
-$(call add-objs,run/tiles/fd_metric,fd_fdctl)
 $(call add-objs,run/tiles/fd_netmux,fd_fdctl)
 $(call add-objs,run/tiles/fd_dedup,fd_fdctl)
 $(call add-objs,run/tiles/fd_pack,fd_fdctl)
@@ -24,6 +23,8 @@ $(call add-objs,run/tiles/fd_bank,fd_fdctl)
 $(call add-objs,run/tiles/fd_shred,fd_fdctl)
 $(call add-objs,run/tiles/fd_store,fd_fdctl)
 $(call add-objs,run/tiles/fd_sign,fd_fdctl)
+$(call add-objs,run/tiles/fd_metric,fd_fdctl)
+$(call add-objs,run/tiles/fd_cswitch,fd_fdctl)
 
 # fdctl configure stages
 $(call add-objs,configure/configure,fd_fdctl)
@@ -52,6 +53,7 @@ $(OBJDIR)/obj/app/fdctl/run/tiles/fd_quic.o: src/app/fdctl/run/tiles/generated/q
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_shred.o: src/app/fdctl/run/tiles/generated/shred_seccomp.h
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_verify.o: src/app/fdctl/run/tiles/generated/verify_seccomp.h
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_metric.o: src/app/fdctl/run/tiles/generated/metric_seccomp.h
+$(OBJDIR)/obj/app/fdctl/run/tiles/fd_cswitch.o: src/app/fdctl/run/tiles/generated/cswitch_seccomp.h
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_sign.o: src/app/fdctl/run/tiles/generated/sign_seccomp.h
 
 # Phony target to always rerun cargo build ... it will detect if anything
