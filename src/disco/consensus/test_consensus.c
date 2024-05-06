@@ -126,43 +126,38 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
     };
   } else if ( data->discriminant == fd_crds_data_enum_vote ) {
     fd_gossip_vote_t *vote = &data->inner.vote;
-    fd_txn_t *parsed_txn = (fd_txn_t *)fd_type_pun( vote->txn.txn_buf );
+    fd_txn_t *parsed_txn = (fd_txn_t *)fd_type_pun( vote->txn.txn );
 
-    if (parsed_txn) {
-      if (parsed_txn->instr_cnt > 0) {
-        uchar program_id = parsed_txn->instr[0].program_id;
-        uchar* account_addr = (vote->txn.raw + parsed_txn->acct_addr_off
-                               + FD_TXN_ACCT_ADDR_SZ * program_id );
+    FD_TEST( parsed_txn );
+    FD_TEST( parsed_txn->instr_cnt == 1);
 
-        if ( !memcmp( account_addr, fd_solana_vote_program_id.key, sizeof( fd_pubkey_t ) ) ) {
-          fd_vote_instruction_t vote_instr;
-          ushort data_sz = parsed_txn->instr[0].data_sz;
-          uchar* data = vote->txn.raw + parsed_txn->instr[0].data_off;
-          fd_bincode_decode_ctx_t decode = {
-                                            .data    = data,
-                                            .dataend = data + data_sz,
-                                            .valloc  = arg_->valloc
-          };
-          int decode_result = fd_vote_instruction_decode( &vote_instr, &decode );
-          if( decode_result == FD_BINCODE_SUCCESS) {
-            FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, account_addr=%32J, vote_instr_discriminant=%u",
-                             vote->index,
-                             vote->txn.raw_sz,
-                             account_addr,
-                             vote_instr.discriminant) );
-          } else {
-            FD_LOG_ERR( ("Unable to decode the vote instruction in gossip, error=%d", decode_result) );
-          }
-        } else {
-          FD_LOG_ERR( ("Received gossip vote txn targets program %32J instead of %32J",
-                       account_addr,
-                       fd_solana_vote_program_id.key) );
-        }
+    uchar program_id = parsed_txn->instr[0].program_id;
+    uchar* account_addr = (vote->txn.raw + parsed_txn->acct_addr_off
+                           + FD_TXN_ACCT_ADDR_SZ * program_id );
+
+    if ( !memcmp( account_addr, fd_solana_vote_program_id.key, sizeof( fd_pubkey_t ) ) ) {
+      fd_vote_instruction_t vote_instr;
+      ushort data_sz = parsed_txn->instr[0].data_sz;
+      uchar* data = vote->txn.raw + parsed_txn->instr[0].data_off;
+      fd_bincode_decode_ctx_t decode = {
+                                        .data    = data,
+                                        .dataend = data + data_sz,
+                                        .valloc  = arg_->valloc
+      };
+      int decode_result = fd_vote_instruction_decode( &vote_instr, &decode );
+      if( decode_result == FD_BINCODE_SUCCESS) {
+        FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, account_addr=%32J, vote_instr_discriminant=%u",
+                         vote->index,
+                         vote->txn.raw_sz,
+                         account_addr,
+                         vote_instr.discriminant) );
       } else {
-        FD_LOG_ERR( ("Received gossip vote txn has 0 instructions") );
+        FD_LOG_ERR( ("Unable to decode the vote instruction in gossip, error=%d", decode_result) );
       }
     } else {
-      FD_LOG_ERR( ("Fail to parse gossip vote txn idx=%u, raw_sz=%lu", vote->index, vote->txn.raw_sz) );
+      FD_LOG_ERR( ("Received gossip vote txn targets program %32J instead of %32J",
+                   account_addr,
+                   fd_solana_vote_program_id.key) );
     }
   }
 }
