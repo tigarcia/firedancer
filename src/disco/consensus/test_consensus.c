@@ -112,6 +112,10 @@ struct gossip_deliver_arg {
 };
 typedef struct gossip_deliver_arg gossip_deliver_arg_t;
 
+int
+fd_vote_decode_compact_update( fd_compact_vote_state_update_t * compact_update,
+                               fd_vote_state_update_t *         vote_update );
+
 /* functions for fd_gossip_config_t and fd_repair_config_t */
 static void
 gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
@@ -146,11 +150,19 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
       };
       int decode_result = fd_vote_instruction_decode( &vote_instr, &decode );
       if( decode_result == FD_BINCODE_SUCCESS) {
-        FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, account_addr=%32J, vote_instr_discriminant=%u",
-                         vote->index,
-                         vote->txn.raw_sz,
-                         account_addr,
-                         vote_instr.discriminant) );
+        if  ( vote_instr.discriminant == fd_vote_instruction_enum_compact_update_vote_state ) {
+          fd_vote_state_update_t vote_update;
+          fd_vote_decode_compact_update(&vote_instr.inner.compact_update_vote_state,
+                                        &vote_update);
+          FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, account_addr=%32J, vote_instr_discriminant=%u, vote_update_root=%lu",
+                           vote->index,
+                           vote->txn.raw_sz,
+                           account_addr,
+                           vote_instr.discriminant,
+                           vote_update.root) );
+        } else {
+          FD_LOG_WARNING( ("Gossip receives vote instruction with other discriminant") );
+        }
       } else {
         FD_LOG_ERR( ("Unable to decode the vote instruction in gossip, error=%d", decode_result) );
       }
