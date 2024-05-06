@@ -138,12 +138,30 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
                                + FD_TXN_ACCT_ADDR_SZ * program_id );
 
         if ( !memcmp( account_addr, fd_solana_vote_program_id.key, sizeof( fd_pubkey_t ) ) ) {
-          FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, fd_txn_sz=%lu, account_addr=%32J",
-                           vote->index,
-                           vote->txn.raw_sz,
-                           fd_txn_sz,
-                           account_addr) );
-          /* TODO: create fd_exec_instr_ctx_t and invoke fd_vote_program_execute() */
+          fd_vote_instruction_t vote_instr;
+          ushort data_sz = parsed_txn->instr[0].data_sz;
+          uchar* data = vote->txn.raw + parsed_txn->instr[0].data_off;
+          FD_LOG_NOTICE( ("data_off=%u, data_sz=%u, raw_sz=%lu",
+                          parsed_txn->instr[0].data_off,
+                          parsed_txn->instr[0].data_sz,
+                          vote->txn.raw_sz) );
+          fd_bincode_decode_ctx_t decode = {
+                                            .data    = data,
+                                            .dataend = data + data_sz,
+                                            //.valloc  = arg_->valloc
+                                            .valloc  = fd_scratch_virtual()
+          };
+          int decode_result = fd_vote_instruction_decode( &vote_instr, &decode );
+          if( decode_result == FD_BINCODE_SUCCESS) {
+            FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, fd_txn_sz=%lu, account_addr=%32J, vote_instr_discriminant=%u",
+                             vote->index,
+                             vote->txn.raw_sz,
+                             fd_txn_sz,
+                             account_addr,
+                             vote_instr.discriminant) );
+          } else {
+            FD_LOG_ERR( ("Unable to decode the vote instruction in gossip, error=%d", decode_result) );
+          }
         } else {
           FD_LOG_ERR( ("Received gossip vote txn targets program %32J instead of %32J",
                        account_addr,
