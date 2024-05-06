@@ -124,6 +124,20 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
       FD_LOG_DEBUG( ( "error adding peer" ) ); /* Probably filled up the table */
     };
   }
+
+  if ( data->discriminant == fd_crds_data_enum_vote ) {
+    fd_gossip_vote_t *vote = &data->inner.vote;
+    uchar parsed_txn[FD_TXN_MAX_SZ];
+    fd_txn_parse_counters_t counters;
+    ulong fd_txn_sz = fd_txn_parse(vote->txn.raw, vote->txn.raw_sz, parsed_txn, &counters);
+
+    if (fd_txn_sz) {
+      FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, fd_txn_sz=%lu",
+                       vote->index, vote->txn.raw_sz, fd_txn_sz) );
+    } else {
+      FD_LOG_ERR( ("Fail to parse gossip vote txn idx=%u, raw_sz=%lu", vote->index, vote->txn.raw_sz) );
+    }
+  }
 }
 
 static void
