@@ -125,13 +125,10 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
       FD_LOG_DEBUG( ( "error adding peer" ) ); /* Probably filled up the table */
     };
   } else if ( data->discriminant == fd_crds_data_enum_vote ) {
-    fd_txn_parse_counters_t counters;
-    uchar parsed_txn_raw[FD_TXN_MAX_SZ];
     fd_gossip_vote_t *vote = &data->inner.vote;
-    ulong fd_txn_sz = fd_txn_parse(vote->txn.raw, vote->txn.raw_sz, parsed_txn_raw, &counters);
-    fd_txn_t *parsed_txn = (fd_txn_t *)fd_type_pun( parsed_txn_raw );
+    fd_txn_t *parsed_txn = (fd_txn_t *)fd_type_pun( vote->txn.txn_buf );
 
-    if (fd_txn_sz) {
+    if (parsed_txn) {
       if (parsed_txn->instr_cnt > 0) {
         uchar program_id = parsed_txn->instr[0].program_id;
         uchar* account_addr = (vote->txn.raw + parsed_txn->acct_addr_off
@@ -141,22 +138,16 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
           fd_vote_instruction_t vote_instr;
           ushort data_sz = parsed_txn->instr[0].data_sz;
           uchar* data = vote->txn.raw + parsed_txn->instr[0].data_off;
-          FD_LOG_NOTICE( ("data_off=%u, data_sz=%u, raw_sz=%lu",
-                          parsed_txn->instr[0].data_off,
-                          parsed_txn->instr[0].data_sz,
-                          vote->txn.raw_sz) );
           fd_bincode_decode_ctx_t decode = {
                                             .data    = data,
                                             .dataend = data + data_sz,
-                                            //.valloc  = arg_->valloc
-                                            .valloc  = fd_scratch_virtual()
+                                            .valloc  = arg_->valloc
           };
           int decode_result = fd_vote_instruction_decode( &vote_instr, &decode );
           if( decode_result == FD_BINCODE_SUCCESS) {
-            FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, fd_txn_sz=%lu, account_addr=%32J, vote_instr_discriminant=%u",
+            FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, account_addr=%32J, vote_instr_discriminant=%u",
                              vote->index,
                              vote->txn.raw_sz,
-                             fd_txn_sz,
                              account_addr,
                              vote_instr.discriminant) );
           } else {
@@ -836,7 +827,7 @@ main( int argc, char ** argv ) {
   FD_TEST( resolve_hostport( ":9001", &gossip_config.my_addr ) );
   gossip_config.shred_version             = 0;
   gossip_config.deliver_fun               = gossip_deliver_fun;
-  gossip_deliver_arg_t gossip_deliver_arg = { .repair = repair, .bft = bft };
+  gossip_deliver_arg_t gossip_deliver_arg = { .repair = repair, .bft = bft, .valloc = valloc};
   gossip_config.deliver_arg               = &gossip_deliver_arg;
   gossip_config.send_fun                  = gossip_send_fun;
   int gossip_sockfd                       = create_socket( &gossip_config.my_addr );
