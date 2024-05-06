@@ -140,7 +140,7 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
                            + FD_TXN_ACCT_ADDR_SZ * program_id );
 
     if ( !memcmp( account_addr, fd_solana_vote_program_id.key, sizeof( fd_pubkey_t ) ) ) {
-      fd_vote_instruction_t vote_instr;
+      fd_vote_instruction_t vote_instr = { 0 };
       ushort data_sz = parsed_txn->instr[0].data_sz;
       uchar* data = vote->txn.raw + parsed_txn->instr[0].data_off;
       fd_bincode_decode_ctx_t decode = {
@@ -151,7 +151,7 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
       int decode_result = fd_vote_instruction_decode( &vote_instr, &decode );
       if( decode_result == FD_BINCODE_SUCCESS) {
         if  ( vote_instr.discriminant == fd_vote_instruction_enum_compact_update_vote_state ) {
-          fd_vote_state_update_t vote_update;
+          fd_vote_state_update_t vote_update = { 0 };
           fd_vote_decode_compact_update(&vote_instr.inner.compact_update_vote_state,
                                         &vote_update);
           FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, account_addr=%32J, vote_instr_discriminant=%u, vote_update_root=%lu",
