@@ -22,6 +22,7 @@
 #include "../../flamenco/fd_flamenco.h"
 #include "../../flamenco/repair/fd_repair.h"
 #include "../../flamenco/runtime/fd_hashes.h"
+#include "../../flamenco/runtime/fd_system_ids.h"
 #include "../../flamenco/runtime/fd_snapshot_loader.h"
 #include "../../flamenco/runtime/program/fd_bpf_program_util.h"
 #include "../../flamenco/runtime/sysvar/fd_sysvar_epoch_schedule.h"
@@ -123,17 +124,34 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
             arg_->repair, &repair_peer_addr, &data->inner.contact_info_v1.id ) ) ) {
       FD_LOG_DEBUG( ( "error adding peer" ) ); /* Probably filled up the table */
     };
-  }
-
-  if ( data->discriminant == fd_crds_data_enum_vote ) {
-    fd_gossip_vote_t *vote = &data->inner.vote;
-    uchar parsed_txn[FD_TXN_MAX_SZ];
+  } else if ( data->discriminant == fd_crds_data_enum_vote ) {
     fd_txn_parse_counters_t counters;
-    ulong fd_txn_sz = fd_txn_parse(vote->txn.raw, vote->txn.raw_sz, parsed_txn, &counters);
+    uchar parsed_txn_raw[FD_TXN_MAX_SZ];
+    fd_gossip_vote_t *vote = &data->inner.vote;
+    ulong fd_txn_sz = fd_txn_parse(vote->txn.raw, vote->txn.raw_sz, parsed_txn_raw, &counters);
+    fd_txn_t *parsed_txn = (fd_txn_t *)fd_type_pun( parsed_txn_raw );
 
     if (fd_txn_sz) {
-      FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, fd_txn_sz=%lu",
-                       vote->index, vote->txn.raw_sz, fd_txn_sz) );
+      if (parsed_txn->instr_cnt > 0) {
+        uchar program_id = parsed_txn->instr[0].program_id;
+        uchar* account_addr = (vote->txn.raw + parsed_txn->acct_addr_off
+                               + FD_TXN_ACCT_ADDR_SZ * program_id );
+
+        if ( !memcmp( account_addr, fd_solana_vote_program_id.key, sizeof( fd_pubkey_t ) ) ) {
+          FD_LOG_WARNING( ("Receive gossip vote idx=%u from gossip, raw_sz=%lu, fd_txn_sz=%lu, account_addr=%32J",
+                           vote->index,
+                           vote->txn.raw_sz,
+                           fd_txn_sz,
+                           account_addr) );
+          /* TODO: create fd_exec_instr_ctx_t and invoke fd_vote_program_execute() */
+        } else {
+          FD_LOG_ERR( ("Received gossip vote txn targets program %32J instead of %32J",
+                       account_addr,
+                       fd_solana_vote_program_id.key) );
+        }
+      } else {
+        FD_LOG_ERR( ("Received gossip vote txn has 0 instructions") );
+      }
     } else {
       FD_LOG_ERR( ("Fail to parse gossip vote txn idx=%u, raw_sz=%lu", vote->index, vote->txn.raw_sz) );
     }
