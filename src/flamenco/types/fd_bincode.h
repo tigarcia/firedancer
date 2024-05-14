@@ -54,8 +54,8 @@ typedef struct fd_bincode_destroy_ctx fd_bincode_destroy_ctx_t;
 
 #define FD_BINCODE_PRIMITIVE_STUBS( name, type ) \
   static inline int \
-  fd_bincode_##name##_decode( type *                    self, \
-                              fd_bincode_decode_ctx_t * ctx ) { \
+  fd_bincode_##name##_decode_limit( type *                    self, \
+                                    fd_bincode_decode_ctx_t * ctx ) { \
     uchar const * ptr = (uchar const *) ctx->data; \
     if ( FD_UNLIKELY((void const *)(ptr + sizeof(type)) > ctx->dataend ) ) \
       return FD_BINCODE_ERR_UNDERFLOW; \
@@ -99,7 +99,7 @@ FD_BINCODE_PRIMITIVE_STUBS( uint128, uint128 )
 FD_BINCODE_PRIMITIVE_STUBS( double,  double  )
 
 static inline int
-fd_bincode_bool_decode( uchar *                   self,
+fd_bincode_bool_decode_limit( uchar *                   self,
                         fd_bincode_decode_ctx_t * ctx ) {
 
   uchar const * ptr = (uchar const *)ctx->data;
