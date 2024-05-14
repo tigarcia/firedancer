@@ -54,6 +54,22 @@ fd_flamenco_txn_decode_unsafe( fd_flamenco_txn_t *       self,
   ctx->data = (void *)( (ulong)ctx->data + sz );
 }
 
+int
+fd_flamenco_txn_decode_limit( fd_flamenco_txn_t *       self,
+                               fd_bincode_decode_ctx_t * ctx ) {
+  static FD_TL fd_txn_parse_counters_t counters[1];
+  ulong bufsz = (ulong)ctx->dataend - (ulong)ctx->data;
+  ulong sz;
+  ulong res = fd_txn_parse_core( ctx->data, bufsz, self->txn, counters, &sz, 0 );
+  if( FD_UNLIKELY( !res ) ) {
+    return -1000001;
+  }
+  fd_memcpy( self->raw, ctx->data, sz );
+  self->raw_sz = sz;
+  ctx->data = (void *)( (ulong)ctx->data + sz );
+  return 0;
+}
+
 void
 fd_gossip_ip4_addr_walk( void *                       w,
                          fd_gossip_ip4_addr_t const * self,

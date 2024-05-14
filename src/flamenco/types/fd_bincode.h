@@ -186,6 +186,21 @@ fd_bincode_bytes_decode_unsafe( uchar *                   self,
 }
 
 static inline int
+fd_bincode_bytes_decode_limit( uchar *                   self,
+                                ulong                     len,
+                                fd_bincode_decode_ctx_t * ctx ) {
+  uchar * ptr = (uchar *) ctx->data;
+
+  if ( FD_UNLIKELY((ulong)( (uchar *) ctx->dataend - ptr) < len ) ) // Get wrap-around case right
+    return FD_BINCODE_ERR_UNDERFLOW;
+
+  fd_memcpy(self, ptr, len);
+  ctx->data = ptr + len;
+
+  return FD_BINCODE_SUCCESS;
+}
+
+static inline int
 fd_bincode_bytes_encode( uchar const *             self,
                          ulong                     len,
                          fd_bincode_encode_ctx_t * ctx ) {

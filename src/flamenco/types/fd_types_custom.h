@@ -46,6 +46,7 @@ FD_PROTOTYPES_BEGIN
 #define fd_pubkey_decode           fd_hash_decode
 #define fd_pubkey_decode_preflight fd_hash_decode_preflight
 #define fd_pubkey_decode_unsafe    fd_hash_decode_unsafe
+#define fd_pubkey_decode_limit     fd_hash_decode_limit
 #define fd_pubkey_encode           fd_hash_encode
 #define fd_pubkey_destroy          fd_hash_destroy
 #define fd_pubkey_size             fd_hash_size
@@ -110,6 +111,10 @@ fd_flamenco_txn_decode_preflight( fd_bincode_decode_ctx_t * ctx );
 
 void
 fd_flamenco_txn_decode_unsafe( fd_flamenco_txn_t *       self,
+                               fd_bincode_decode_ctx_t * ctx );
+
+int
+fd_flamenco_txn_decode_limit( fd_flamenco_txn_t *       self,
                                fd_bincode_decode_ctx_t * ctx );
 
 static inline void
