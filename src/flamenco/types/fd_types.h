@@ -1845,7 +1845,7 @@ typedef struct fd_compact_vote_state_update_switch_off fd_compact_vote_state_upd
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_state/mod.rs#L185 */
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(8UL))) fd_tower_sync {
-  fd_vote_lockout_t * lockouts; /* fd_deque_dynamic */
+  fd_vote_lockout_t * lockouts; /* fd_deque_dynamic (min cnt 32) */
   ulong lockouts_cnt;
   ulong root;
   uchar has_root;

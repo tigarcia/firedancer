@@ -10047,7 +10047,8 @@ int fd_tower_sync_decode_limit( fd_tower_sync_t * self, fd_bincode_decode_ctx_t 
   ulong lockouts_len;
   err = fd_bincode_uint64_decode_limit( &lockouts_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_len );
+  ulong lockouts_max = fd_ulong_max( lockouts_len, 32 );
+  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_max );
   for( ulong i=0; i < lockouts_len; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->lockouts );
     fd_vote_lockout_new( elem );
@@ -10085,7 +10086,8 @@ int fd_tower_sync_decode_limit( fd_tower_sync_t * self, fd_bincode_decode_ctx_t 
 void fd_tower_sync_decode_unsafe( fd_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx ) {
   ulong lockouts_len;
   fd_bincode_uint64_decode_unsafe( &lockouts_len, ctx );
-  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_len );
+  ulong lockouts_max = fd_ulong_max( lockouts_len, 32 );
+  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_max );
   for( ulong i=0; i < lockouts_len; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->lockouts );
     fd_vote_lockout_new( elem );
