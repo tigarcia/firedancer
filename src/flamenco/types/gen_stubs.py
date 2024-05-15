@@ -658,7 +658,7 @@ class DequeMember:
         print("#undef DEQUE_MAX", file=header)
         print(f'static inline {element_type} *', file=header)
         print(f'{dp}_alloc( fd_valloc_t valloc, ulong max ) {{', file=header)
-        print(f'  if (0 == max) max = 1; // prevent underflow', file=header)
+        print(f'  if( FD_UNLIKELY( 0 == max ) ) max = 1; // prevent underflow', file=header)
         print(f'  void * mem = fd_valloc_malloc( valloc, {dp}_align(), {dp}_footprint( max ) );', file=header)
         print(f'  return {dp}_join( {dp}_new( mem, max ) );', file=header)
         print("}", file=header)
