@@ -1609,10 +1609,10 @@ struct __attribute__((aligned(8UL))) fd_vote_state_0_23_5 {
   fd_vote_prior_voters_0_23_5_t prior_voters;
   fd_pubkey_t authorized_withdrawer;
   uchar commission;
-  fd_vote_lockout_t * votes; /* fd_deque_dynamic (min cnt 32) */
+  fd_vote_lockout_t * votes; /* fd_deque_dynamic(min cnt 32,) */
   ulong root_slot;
   uchar has_root_slot;
-  fd_vote_epoch_credits_t * epoch_credits; /* fd_deque_dynamic (min cnt 64) */
+  fd_vote_epoch_credits_t * epoch_credits; /* fd_deque_dynamic(min cnt 64,) */
   fd_vote_block_timestamp_t last_timestamp;
 };
 typedef struct fd_vote_state_0_23_5 fd_vote_state_0_23_5_t;
@@ -1687,12 +1687,12 @@ struct __attribute__((aligned(8UL))) fd_vote_state_1_14_11 {
   fd_pubkey_t node_pubkey;
   fd_pubkey_t authorized_withdrawer;
   uchar commission;
-  fd_vote_lockout_t * votes; /* fd_deque_dynamic (min cnt 32) */
+  fd_vote_lockout_t * votes; /* fd_deque_dynamic(min cnt 32,) */
   ulong root_slot;
   uchar has_root_slot;
   fd_vote_authorized_voters_t authorized_voters;
   fd_vote_prior_voters_t prior_voters;
-  fd_vote_epoch_credits_t * epoch_credits; /* fd_deque_dynamic (min cnt 64) */
+  fd_vote_epoch_credits_t * epoch_credits; /* fd_deque_dynamic(min cnt 64,) */
   fd_vote_block_timestamp_t last_timestamp;
 };
 typedef struct fd_vote_state_1_14_11 fd_vote_state_1_14_11_t;
@@ -1732,12 +1732,12 @@ struct __attribute__((aligned(8UL))) fd_vote_state {
   fd_pubkey_t node_pubkey;
   fd_pubkey_t authorized_withdrawer;
   uchar commission;
-  fd_landed_vote_t * votes; /* fd_deque_dynamic (min cnt 32) */
+  fd_landed_vote_t * votes; /* fd_deque_dynamic(min cnt 32,) */
   ulong root_slot;
   uchar has_root_slot;
   fd_vote_authorized_voters_t authorized_voters;
   fd_vote_prior_voters_t prior_voters;
-  fd_vote_epoch_credits_t * epoch_credits; /* fd_deque_dynamic (min cnt 64) */
+  fd_vote_epoch_credits_t * epoch_credits; /* fd_deque_dynamic(min cnt 64,) */
   fd_vote_block_timestamp_t last_timestamp;
 };
 typedef struct fd_vote_state fd_vote_state_t;
@@ -1794,7 +1794,7 @@ typedef struct fd_vote_state_versioned_off fd_vote_state_versioned_off_t;
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_state/mod.rs#L185 */
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(8UL))) fd_vote_state_update {
-  fd_vote_lockout_t * lockouts; /* fd_deque_dynamic (min cnt 32) */
+  fd_vote_lockout_t * lockouts; /* fd_deque_dynamic(min cnt 32,max cnt 100) */
   ulong root;
   uchar has_root;
   fd_hash_t hash;
@@ -1857,7 +1857,7 @@ typedef struct fd_compact_vote_state_update_switch_off fd_compact_vote_state_upd
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_state/mod.rs#L185 */
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(8UL))) fd_tower_sync {
-  fd_vote_lockout_t * lockouts; /* fd_deque_dynamic (min cnt 32) */
+  fd_vote_lockout_t * lockouts; /* fd_deque_dynamic(min cnt 32,max cnt 100) */
   ulong lockouts_cnt;
   ulong root;
   uchar has_root;
@@ -1984,7 +1984,7 @@ deq_fd_slot_hash_t_alloc( fd_valloc_t valloc, ulong max ) {
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/sdk/program/src/slot_hashes.rs#L31 */
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(8UL))) fd_slot_hashes {
-  fd_slot_hash_t * hashes; /* fd_deque_dynamic (min cnt 512) */
+  fd_slot_hash_t * hashes; /* fd_deque_dynamic(min cnt 512,) */
 };
 typedef struct fd_slot_hashes fd_slot_hashes_t;
 #define FD_SLOT_HASHES_FOOTPRINT sizeof(fd_slot_hashes_t)
@@ -2028,7 +2028,7 @@ deq_fd_block_block_hash_entry_t_alloc( fd_valloc_t valloc, ulong max ) {
 }
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(8UL))) fd_recent_block_hashes {
-  fd_block_block_hash_entry_t * hashes; /* fd_deque_dynamic (min cnt 151) */
+  fd_block_block_hash_entry_t * hashes; /* fd_deque_dynamic(min cnt 151,) */
 };
 typedef struct fd_recent_block_hashes fd_recent_block_hashes_t;
 #define FD_RECENT_BLOCK_HASHES_FOOTPRINT sizeof(fd_recent_block_hashes_t)
@@ -2417,7 +2417,7 @@ deq_ulong_alloc( fd_valloc_t valloc, ulong max ) {
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_state/mod.rs#L133 */
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(8UL))) fd_vote {
-  ulong * slots; /* fd_deque_dynamic */
+  ulong * slots; /* fd_deque_dynamic(,) */
   fd_hash_t hash;
   ulong* timestamp;
 };

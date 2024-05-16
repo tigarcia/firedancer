@@ -630,6 +630,7 @@ class DequeMember:
         self.element = json["element"]
         self.compact = ("modifier" in json and json["modifier"] == "compact")
         self.min = json.get("min", None)
+        self.max = json.get("max", None)
         self.growth = (json["growth"] if "growth" in json else None)
 
     def elem_type(self):
@@ -668,10 +669,14 @@ class DequeMember:
 
     def emitMember(self):
         if self.min:
-            min_tag = f" (min cnt {self.min})"
+            min_tag = f"min cnt {self.min}"
         else:
             min_tag = ""
-        print(f'  {self.elem_type()} * {self.name}; /* fd_deque_dynamic{min_tag} */', file=header)
+        if self.max:
+            max_tag = f"max cnt {self.max}"
+        else:
+            max_tag = ""
+        print(f'  {self.elem_type()} * {self.name}; /* fd_deque_dynamic({min_tag},{max_tag}) */', file=header)
 
     def emitOffsetMember(self):
         print(f'  uint {self.name}_off;', file=header)
@@ -728,13 +733,14 @@ class DequeMember:
             print(f'  err = fd_bincode_uint64_decode_limit( &{self.name}_len, ctx );', file=body)
         print(f'  if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;', file=body)
 
+        print(f'  ulong {self.name}_cnt = {self.name}_len;', file=body)
         if self.min:
-            print(f'  ulong {self.name}_max = fd_ulong_max( {self.name}_len, {self.min} );', file=body)
-            print(f'  self->{self.name} = {self.prefix()}_alloc( ctx->valloc, {self.name}_max );', file=body)
-        else:
-            print(f'  self->{self.name} = {self.prefix()}_alloc( ctx->valloc, {self.name}_len );', file=body)
+            print(f'  {self.name}_cnt = fd_ulong_max( {self.name}_cnt, {self.min} );', file=body)
+        if self.max:
+            print(f'  {self.name}_cnt = fd_ulong_min( {self.name}_cnt, {self.max} );', file=body)
+        print(f'  self->{self.name} = {self.prefix()}_alloc( ctx->valloc, {self.name}_cnt );', file=body)
 
-        print(f'  for( ulong i=0; i < {self.name}_len; i++ ) {{', file=body)
+        print(f'  for( ulong i=0; i < {self.name}_cnt; i++ ) {{', file=body)
         print(f'    {self.elem_type()} * elem = {self.prefix()}_push_tail_nocopy( self->{self.name} );', file=body);
 
         if self.element in simpletypes:
@@ -754,13 +760,14 @@ class DequeMember:
             print(f'  ulong {self.name}_len;', file=body)
             print(f'  fd_bincode_uint64_decode_unsafe( &{self.name}_len, ctx );', file=body)
 
+        print(f'  ulong {self.name}_cnt = {self.name}_len;', file=body)
         if self.min:
-            print(f'  ulong {self.name}_max = fd_ulong_max( {self.name}_len, {self.min} );', file=body)
-            print(f'  self->{self.name} = {self.prefix()}_alloc( ctx->valloc, {self.name}_max );', file=body)
-        else:
-            print(f'  self->{self.name} = {self.prefix()}_alloc( ctx->valloc, {self.name}_len );', file=body)
+            print(f'  {self.name}_cnt = fd_ulong_max( {self.name}_cnt, {self.min} );', file=body)
+        if self.max:
+            print(f'  {self.name}_cnt = fd_ulong_min( {self.name}_cnt, {self.max} );', file=body)
+        print(f'  self->{self.name} = {self.prefix()}_alloc( ctx->valloc, {self.name}_cnt );', file=body)
 
-        print(f'  for( ulong i=0; i < {self.name}_len; i++ ) {{', file=body)
+        print(f'  for( ulong i=0; i < {self.name}_cnt; i++ ) {{', file=body)
         print(f'    {self.elem_type()} * elem = {self.prefix()}_push_tail_nocopy( self->{self.name} );', file=body);
 
         if self.element in simpletypes:

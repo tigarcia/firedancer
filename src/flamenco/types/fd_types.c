@@ -8140,9 +8140,10 @@ int fd_vote_state_0_23_5_decode_limit( fd_vote_state_0_23_5_t * self, fd_bincode
   ulong votes_len;
   err = fd_bincode_uint64_decode_limit( &votes_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong votes_max = fd_ulong_max( votes_len, 32 );
-  self->votes = deq_fd_vote_lockout_t_alloc( ctx->valloc, votes_max );
-  for( ulong i=0; i < votes_len; i++ ) {
+  ulong votes_cnt = votes_len;
+  votes_cnt = fd_ulong_max( votes_cnt, 32 );
+  self->votes = deq_fd_vote_lockout_t_alloc( ctx->valloc, votes_cnt );
+  for( ulong i=0; i < votes_cnt; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->votes );
     fd_vote_lockout_new( elem );
     err = fd_vote_lockout_decode_limit( elem, ctx );
@@ -8161,9 +8162,10 @@ int fd_vote_state_0_23_5_decode_limit( fd_vote_state_0_23_5_t * self, fd_bincode
   ulong epoch_credits_len;
   err = fd_bincode_uint64_decode_limit( &epoch_credits_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong epoch_credits_max = fd_ulong_max( epoch_credits_len, 64 );
-  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_max );
-  for( ulong i=0; i < epoch_credits_len; i++ ) {
+  ulong epoch_credits_cnt = epoch_credits_len;
+  epoch_credits_cnt = fd_ulong_max( epoch_credits_cnt, 64 );
+  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_cnt );
+  for( ulong i=0; i < epoch_credits_cnt; i++ ) {
     fd_vote_epoch_credits_t * elem = deq_fd_vote_epoch_credits_t_push_tail_nocopy( self->epoch_credits );
     fd_vote_epoch_credits_new( elem );
     err = fd_vote_epoch_credits_decode_limit( elem, ctx );
@@ -8182,9 +8184,10 @@ void fd_vote_state_0_23_5_decode_unsafe( fd_vote_state_0_23_5_t * self, fd_binco
   fd_bincode_uint8_decode_unsafe( &self->commission, ctx );
   ulong votes_len;
   fd_bincode_uint64_decode_unsafe( &votes_len, ctx );
-  ulong votes_max = fd_ulong_max( votes_len, 32 );
-  self->votes = deq_fd_vote_lockout_t_alloc( ctx->valloc, votes_max );
-  for( ulong i=0; i < votes_len; i++ ) {
+  ulong votes_cnt = votes_len;
+  votes_cnt = fd_ulong_max( votes_cnt, 32 );
+  self->votes = deq_fd_vote_lockout_t_alloc( ctx->valloc, votes_cnt );
+  for( ulong i=0; i < votes_cnt; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->votes );
     fd_vote_lockout_new( elem );
     fd_vote_lockout_decode_unsafe( elem, ctx );
@@ -8199,9 +8202,10 @@ void fd_vote_state_0_23_5_decode_unsafe( fd_vote_state_0_23_5_t * self, fd_binco
   }
   ulong epoch_credits_len;
   fd_bincode_uint64_decode_unsafe( &epoch_credits_len, ctx );
-  ulong epoch_credits_max = fd_ulong_max( epoch_credits_len, 64 );
-  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_max );
-  for( ulong i=0; i < epoch_credits_len; i++ ) {
+  ulong epoch_credits_cnt = epoch_credits_len;
+  epoch_credits_cnt = fd_ulong_max( epoch_credits_cnt, 64 );
+  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_cnt );
+  for( ulong i=0; i < epoch_credits_cnt; i++ ) {
     fd_vote_epoch_credits_t * elem = deq_fd_vote_epoch_credits_t_push_tail_nocopy( self->epoch_credits );
     fd_vote_epoch_credits_new( elem );
     fd_vote_epoch_credits_decode_unsafe( elem, ctx );
@@ -8632,9 +8636,10 @@ int fd_vote_state_1_14_11_decode_limit( fd_vote_state_1_14_11_t * self, fd_binco
   ulong votes_len;
   err = fd_bincode_uint64_decode_limit( &votes_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong votes_max = fd_ulong_max( votes_len, 32 );
-  self->votes = deq_fd_vote_lockout_t_alloc( ctx->valloc, votes_max );
-  for( ulong i=0; i < votes_len; i++ ) {
+  ulong votes_cnt = votes_len;
+  votes_cnt = fd_ulong_max( votes_cnt, 32 );
+  self->votes = deq_fd_vote_lockout_t_alloc( ctx->valloc, votes_cnt );
+  for( ulong i=0; i < votes_cnt; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->votes );
     fd_vote_lockout_new( elem );
     err = fd_vote_lockout_decode_limit( elem, ctx );
@@ -8657,9 +8662,10 @@ int fd_vote_state_1_14_11_decode_limit( fd_vote_state_1_14_11_t * self, fd_binco
   ulong epoch_credits_len;
   err = fd_bincode_uint64_decode_limit( &epoch_credits_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong epoch_credits_max = fd_ulong_max( epoch_credits_len, 64 );
-  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_max );
-  for( ulong i=0; i < epoch_credits_len; i++ ) {
+  ulong epoch_credits_cnt = epoch_credits_len;
+  epoch_credits_cnt = fd_ulong_max( epoch_credits_cnt, 64 );
+  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_cnt );
+  for( ulong i=0; i < epoch_credits_cnt; i++ ) {
     fd_vote_epoch_credits_t * elem = deq_fd_vote_epoch_credits_t_push_tail_nocopy( self->epoch_credits );
     fd_vote_epoch_credits_new( elem );
     err = fd_vote_epoch_credits_decode_limit( elem, ctx );
@@ -8675,9 +8681,10 @@ void fd_vote_state_1_14_11_decode_unsafe( fd_vote_state_1_14_11_t * self, fd_bin
   fd_bincode_uint8_decode_unsafe( &self->commission, ctx );
   ulong votes_len;
   fd_bincode_uint64_decode_unsafe( &votes_len, ctx );
-  ulong votes_max = fd_ulong_max( votes_len, 32 );
-  self->votes = deq_fd_vote_lockout_t_alloc( ctx->valloc, votes_max );
-  for( ulong i=0; i < votes_len; i++ ) {
+  ulong votes_cnt = votes_len;
+  votes_cnt = fd_ulong_max( votes_cnt, 32 );
+  self->votes = deq_fd_vote_lockout_t_alloc( ctx->valloc, votes_cnt );
+  for( ulong i=0; i < votes_cnt; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->votes );
     fd_vote_lockout_new( elem );
     fd_vote_lockout_decode_unsafe( elem, ctx );
@@ -8694,9 +8701,10 @@ void fd_vote_state_1_14_11_decode_unsafe( fd_vote_state_1_14_11_t * self, fd_bin
   fd_vote_prior_voters_decode_unsafe( &self->prior_voters, ctx );
   ulong epoch_credits_len;
   fd_bincode_uint64_decode_unsafe( &epoch_credits_len, ctx );
-  ulong epoch_credits_max = fd_ulong_max( epoch_credits_len, 64 );
-  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_max );
-  for( ulong i=0; i < epoch_credits_len; i++ ) {
+  ulong epoch_credits_cnt = epoch_credits_len;
+  epoch_credits_cnt = fd_ulong_max( epoch_credits_cnt, 64 );
+  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_cnt );
+  for( ulong i=0; i < epoch_credits_cnt; i++ ) {
     fd_vote_epoch_credits_t * elem = deq_fd_vote_epoch_credits_t_push_tail_nocopy( self->epoch_credits );
     fd_vote_epoch_credits_new( elem );
     fd_vote_epoch_credits_decode_unsafe( elem, ctx );
@@ -8976,9 +8984,10 @@ int fd_vote_state_decode_limit( fd_vote_state_t * self, fd_bincode_decode_ctx_t 
   ulong votes_len;
   err = fd_bincode_uint64_decode_limit( &votes_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong votes_max = fd_ulong_max( votes_len, 32 );
-  self->votes = deq_fd_landed_vote_t_alloc( ctx->valloc, votes_max );
-  for( ulong i=0; i < votes_len; i++ ) {
+  ulong votes_cnt = votes_len;
+  votes_cnt = fd_ulong_max( votes_cnt, 32 );
+  self->votes = deq_fd_landed_vote_t_alloc( ctx->valloc, votes_cnt );
+  for( ulong i=0; i < votes_cnt; i++ ) {
     fd_landed_vote_t * elem = deq_fd_landed_vote_t_push_tail_nocopy( self->votes );
     fd_landed_vote_new( elem );
     err = fd_landed_vote_decode_limit( elem, ctx );
@@ -9001,9 +9010,10 @@ int fd_vote_state_decode_limit( fd_vote_state_t * self, fd_bincode_decode_ctx_t 
   ulong epoch_credits_len;
   err = fd_bincode_uint64_decode_limit( &epoch_credits_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong epoch_credits_max = fd_ulong_max( epoch_credits_len, 64 );
-  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_max );
-  for( ulong i=0; i < epoch_credits_len; i++ ) {
+  ulong epoch_credits_cnt = epoch_credits_len;
+  epoch_credits_cnt = fd_ulong_max( epoch_credits_cnt, 64 );
+  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_cnt );
+  for( ulong i=0; i < epoch_credits_cnt; i++ ) {
     fd_vote_epoch_credits_t * elem = deq_fd_vote_epoch_credits_t_push_tail_nocopy( self->epoch_credits );
     fd_vote_epoch_credits_new( elem );
     err = fd_vote_epoch_credits_decode_limit( elem, ctx );
@@ -9019,9 +9029,10 @@ void fd_vote_state_decode_unsafe( fd_vote_state_t * self, fd_bincode_decode_ctx_
   fd_bincode_uint8_decode_unsafe( &self->commission, ctx );
   ulong votes_len;
   fd_bincode_uint64_decode_unsafe( &votes_len, ctx );
-  ulong votes_max = fd_ulong_max( votes_len, 32 );
-  self->votes = deq_fd_landed_vote_t_alloc( ctx->valloc, votes_max );
-  for( ulong i=0; i < votes_len; i++ ) {
+  ulong votes_cnt = votes_len;
+  votes_cnt = fd_ulong_max( votes_cnt, 32 );
+  self->votes = deq_fd_landed_vote_t_alloc( ctx->valloc, votes_cnt );
+  for( ulong i=0; i < votes_cnt; i++ ) {
     fd_landed_vote_t * elem = deq_fd_landed_vote_t_push_tail_nocopy( self->votes );
     fd_landed_vote_new( elem );
     fd_landed_vote_decode_unsafe( elem, ctx );
@@ -9038,9 +9049,10 @@ void fd_vote_state_decode_unsafe( fd_vote_state_t * self, fd_bincode_decode_ctx_
   fd_vote_prior_voters_decode_unsafe( &self->prior_voters, ctx );
   ulong epoch_credits_len;
   fd_bincode_uint64_decode_unsafe( &epoch_credits_len, ctx );
-  ulong epoch_credits_max = fd_ulong_max( epoch_credits_len, 64 );
-  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_max );
-  for( ulong i=0; i < epoch_credits_len; i++ ) {
+  ulong epoch_credits_cnt = epoch_credits_len;
+  epoch_credits_cnt = fd_ulong_max( epoch_credits_cnt, 64 );
+  self->epoch_credits = deq_fd_vote_epoch_credits_t_alloc( ctx->valloc, epoch_credits_cnt );
+  for( ulong i=0; i < epoch_credits_cnt; i++ ) {
     fd_vote_epoch_credits_t * elem = deq_fd_vote_epoch_credits_t_push_tail_nocopy( self->epoch_credits );
     fd_vote_epoch_credits_new( elem );
     fd_vote_epoch_credits_decode_unsafe( elem, ctx );
@@ -9512,9 +9524,11 @@ int fd_vote_state_update_decode_limit( fd_vote_state_update_t * self, fd_bincode
   ulong lockouts_len;
   err = fd_bincode_uint64_decode_limit( &lockouts_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong lockouts_max = fd_ulong_max( lockouts_len, 32 );
-  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_max );
-  for( ulong i=0; i < lockouts_len; i++ ) {
+  ulong lockouts_cnt = lockouts_len;
+  lockouts_cnt = fd_ulong_max( lockouts_cnt, 32 );
+  lockouts_cnt = fd_ulong_min( lockouts_cnt, 100 );
+  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_cnt );
+  for( ulong i=0; i < lockouts_cnt; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->lockouts );
     fd_vote_lockout_new( elem );
     err = fd_vote_lockout_decode_limit( elem, ctx );
@@ -9548,9 +9562,11 @@ int fd_vote_state_update_decode_limit( fd_vote_state_update_t * self, fd_bincode
 void fd_vote_state_update_decode_unsafe( fd_vote_state_update_t * self, fd_bincode_decode_ctx_t * ctx ) {
   ulong lockouts_len;
   fd_bincode_uint64_decode_unsafe( &lockouts_len, ctx );
-  ulong lockouts_max = fd_ulong_max( lockouts_len, 32 );
-  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_max );
-  for( ulong i=0; i < lockouts_len; i++ ) {
+  ulong lockouts_cnt = lockouts_len;
+  lockouts_cnt = fd_ulong_max( lockouts_cnt, 32 );
+  lockouts_cnt = fd_ulong_min( lockouts_cnt, 100 );
+  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_cnt );
+  for( ulong i=0; i < lockouts_cnt; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->lockouts );
     fd_vote_lockout_new( elem );
     fd_vote_lockout_decode_unsafe( elem, ctx );
@@ -10047,9 +10063,11 @@ int fd_tower_sync_decode_limit( fd_tower_sync_t * self, fd_bincode_decode_ctx_t 
   ulong lockouts_len;
   err = fd_bincode_uint64_decode_limit( &lockouts_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong lockouts_max = fd_ulong_max( lockouts_len, 32 );
-  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_max );
-  for( ulong i=0; i < lockouts_len; i++ ) {
+  ulong lockouts_cnt = lockouts_len;
+  lockouts_cnt = fd_ulong_max( lockouts_cnt, 32 );
+  lockouts_cnt = fd_ulong_min( lockouts_cnt, 100 );
+  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_cnt );
+  for( ulong i=0; i < lockouts_cnt; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->lockouts );
     fd_vote_lockout_new( elem );
     err = fd_vote_lockout_decode_limit( elem, ctx );
@@ -10086,9 +10104,11 @@ int fd_tower_sync_decode_limit( fd_tower_sync_t * self, fd_bincode_decode_ctx_t 
 void fd_tower_sync_decode_unsafe( fd_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx ) {
   ulong lockouts_len;
   fd_bincode_uint64_decode_unsafe( &lockouts_len, ctx );
-  ulong lockouts_max = fd_ulong_max( lockouts_len, 32 );
-  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_max );
-  for( ulong i=0; i < lockouts_len; i++ ) {
+  ulong lockouts_cnt = lockouts_len;
+  lockouts_cnt = fd_ulong_max( lockouts_cnt, 32 );
+  lockouts_cnt = fd_ulong_min( lockouts_cnt, 100 );
+  self->lockouts = deq_fd_vote_lockout_t_alloc( ctx->valloc, lockouts_cnt );
+  for( ulong i=0; i < lockouts_cnt; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( self->lockouts );
     fd_vote_lockout_new( elem );
     fd_vote_lockout_decode_unsafe( elem, ctx );
@@ -10749,9 +10769,10 @@ int fd_slot_hashes_decode_limit( fd_slot_hashes_t * self, fd_bincode_decode_ctx_
   ulong hashes_len;
   err = fd_bincode_uint64_decode_limit( &hashes_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong hashes_max = fd_ulong_max( hashes_len, 512 );
-  self->hashes = deq_fd_slot_hash_t_alloc( ctx->valloc, hashes_max );
-  for( ulong i=0; i < hashes_len; i++ ) {
+  ulong hashes_cnt = hashes_len;
+  hashes_cnt = fd_ulong_max( hashes_cnt, 512 );
+  self->hashes = deq_fd_slot_hash_t_alloc( ctx->valloc, hashes_cnt );
+  for( ulong i=0; i < hashes_cnt; i++ ) {
     fd_slot_hash_t * elem = deq_fd_slot_hash_t_push_tail_nocopy( self->hashes );
     fd_slot_hash_new( elem );
     err = fd_slot_hash_decode_limit( elem, ctx );
@@ -10762,9 +10783,10 @@ int fd_slot_hashes_decode_limit( fd_slot_hashes_t * self, fd_bincode_decode_ctx_
 void fd_slot_hashes_decode_unsafe( fd_slot_hashes_t * self, fd_bincode_decode_ctx_t * ctx ) {
   ulong hashes_len;
   fd_bincode_uint64_decode_unsafe( &hashes_len, ctx );
-  ulong hashes_max = fd_ulong_max( hashes_len, 512 );
-  self->hashes = deq_fd_slot_hash_t_alloc( ctx->valloc, hashes_max );
-  for( ulong i=0; i < hashes_len; i++ ) {
+  ulong hashes_cnt = hashes_len;
+  hashes_cnt = fd_ulong_max( hashes_cnt, 512 );
+  self->hashes = deq_fd_slot_hash_t_alloc( ctx->valloc, hashes_cnt );
+  for( ulong i=0; i < hashes_cnt; i++ ) {
     fd_slot_hash_t * elem = deq_fd_slot_hash_t_push_tail_nocopy( self->hashes );
     fd_slot_hash_new( elem );
     fd_slot_hash_decode_unsafe( elem, ctx );
@@ -10951,9 +10973,10 @@ int fd_recent_block_hashes_decode_limit( fd_recent_block_hashes_t * self, fd_bin
   ulong hashes_len;
   err = fd_bincode_uint64_decode_limit( &hashes_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  ulong hashes_max = fd_ulong_max( hashes_len, 151 );
-  self->hashes = deq_fd_block_block_hash_entry_t_alloc( ctx->valloc, hashes_max );
-  for( ulong i=0; i < hashes_len; i++ ) {
+  ulong hashes_cnt = hashes_len;
+  hashes_cnt = fd_ulong_max( hashes_cnt, 151 );
+  self->hashes = deq_fd_block_block_hash_entry_t_alloc( ctx->valloc, hashes_cnt );
+  for( ulong i=0; i < hashes_cnt; i++ ) {
     fd_block_block_hash_entry_t * elem = deq_fd_block_block_hash_entry_t_push_tail_nocopy( self->hashes );
     fd_block_block_hash_entry_new( elem );
     err = fd_block_block_hash_entry_decode_limit( elem, ctx );
@@ -10964,9 +10987,10 @@ int fd_recent_block_hashes_decode_limit( fd_recent_block_hashes_t * self, fd_bin
 void fd_recent_block_hashes_decode_unsafe( fd_recent_block_hashes_t * self, fd_bincode_decode_ctx_t * ctx ) {
   ulong hashes_len;
   fd_bincode_uint64_decode_unsafe( &hashes_len, ctx );
-  ulong hashes_max = fd_ulong_max( hashes_len, 151 );
-  self->hashes = deq_fd_block_block_hash_entry_t_alloc( ctx->valloc, hashes_max );
-  for( ulong i=0; i < hashes_len; i++ ) {
+  ulong hashes_cnt = hashes_len;
+  hashes_cnt = fd_ulong_max( hashes_cnt, 151 );
+  self->hashes = deq_fd_block_block_hash_entry_t_alloc( ctx->valloc, hashes_cnt );
+  for( ulong i=0; i < hashes_cnt; i++ ) {
     fd_block_block_hash_entry_t * elem = deq_fd_block_block_hash_entry_t_push_tail_nocopy( self->hashes );
     fd_block_block_hash_entry_new( elem );
     fd_block_block_hash_entry_decode_unsafe( elem, ctx );
@@ -12999,8 +13023,9 @@ int fd_vote_decode_limit( fd_vote_t * self, fd_bincode_decode_ctx_t * ctx ) {
   ulong slots_len;
   err = fd_bincode_uint64_decode_limit( &slots_len, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
-  self->slots = deq_ulong_alloc( ctx->valloc, slots_len );
-  for( ulong i=0; i < slots_len; i++ ) {
+  ulong slots_cnt = slots_len;
+  self->slots = deq_ulong_alloc( ctx->valloc, slots_cnt );
+  for( ulong i=0; i < slots_cnt; i++ ) {
     ulong * elem = deq_ulong_push_tail_nocopy( self->slots );
     err = fd_bincode_uint64_decode_limit( elem, ctx );
     if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
@@ -13023,8 +13048,9 @@ int fd_vote_decode_limit( fd_vote_t * self, fd_bincode_decode_ctx_t * ctx ) {
 void fd_vote_decode_unsafe( fd_vote_t * self, fd_bincode_decode_ctx_t * ctx ) {
   ulong slots_len;
   fd_bincode_uint64_decode_unsafe( &slots_len, ctx );
-  self->slots = deq_ulong_alloc( ctx->valloc, slots_len );
-  for( ulong i=0; i < slots_len; i++ ) {
+  ulong slots_cnt = slots_len;
+  self->slots = deq_ulong_alloc( ctx->valloc, slots_cnt );
+  for( ulong i=0; i < slots_cnt; i++ ) {
     ulong * elem = deq_ulong_push_tail_nocopy( self->slots );
     fd_bincode_uint64_decode_unsafe( elem, ctx );
   }
