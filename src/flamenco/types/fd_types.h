@@ -1854,13 +1854,23 @@ typedef struct fd_compact_vote_state_update_switch_off fd_compact_vote_state_upd
 #define FD_COMPACT_VOTE_STATE_UPDATE_SWITCH_OFF_FOOTPRINT sizeof(fd_compact_vote_state_update_switch_off_t)
 #define FD_COMPACT_VOTE_STATE_UPDATE_SWITCH_OFF_ALIGN (8UL)
 
+#define DEQUE_NAME deq_fd_lockout_offset_t
+#define DEQUE_T fd_lockout_offset_t
+#include "../../util/tmpl/fd_deque_dynamic.c"
+#undef DEQUE_NAME
+#undef DEQUE_T
+#undef DEQUE_MAX
+static inline fd_lockout_offset_t *
+deq_fd_lockout_offset_t_alloc( fd_valloc_t valloc, ulong max ) {
+  if( FD_UNLIKELY( 0 == max ) ) max = 1; // prevent underflow
+  void * mem = fd_valloc_malloc( valloc, deq_fd_lockout_offset_t_align(), deq_fd_lockout_offset_t_footprint( max ) );
+  return deq_fd_lockout_offset_t_join( deq_fd_lockout_offset_t_new( mem, max ) );
+}
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_state/mod.rs#L185 */
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(8UL))) fd_tower_sync {
-  fd_vote_lockout_t * lockouts; /* fd_deque_dynamic(min cnt 32,max cnt 100) */
-  ulong lockouts_cnt;
   ulong root;
-  uchar has_root;
+  fd_lockout_offset_t * lockout_offsets; /* fd_deque_dynamic(min cnt 32,max cnt 100) */
   fd_hash_t hash;
   ulong timestamp;
   uchar has_timestamp;
@@ -1871,9 +1881,8 @@ typedef struct fd_tower_sync fd_tower_sync_t;
 #define FD_TOWER_SYNC_ALIGN (8UL)
 
 struct __attribute__((aligned(8UL))) fd_tower_sync_off {
-  uint lockouts_off;
-  uint lockouts_cnt_off;
   uint root_off;
+  uint lockout_offsets_off;
   uint hash_off;
   uint timestamp_off;
   uint block_id_off;

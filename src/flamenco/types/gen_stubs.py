@@ -631,6 +631,7 @@ class DequeMember:
         self.compact = ("modifier" in json and json["modifier"] == "compact")
         self.min = json.get("min", None)
         self.max = json.get("max", None)
+        self.compact = ("modifier" in json and json["modifier"] == "compact")
         self.growth = (json["growth"] if "growth" in json else None)
 
     def elem_type(self):
@@ -740,7 +741,7 @@ class DequeMember:
             print(f'  {self.name}_cnt = fd_ulong_min( {self.name}_cnt, {self.max} );', file=body)
         print(f'  self->{self.name} = {self.prefix()}_alloc( ctx->valloc, {self.name}_cnt );', file=body)
 
-        print(f'  for( ulong i=0; i < {self.name}_cnt; i++ ) {{', file=body)
+        print(f'  for( ulong i=0; i < {self.name}_len; i++ ) {{', file=body)
         print(f'    {self.elem_type()} * elem = {self.prefix()}_push_tail_nocopy( self->{self.name} );', file=body);
 
         if self.element in simpletypes:
@@ -748,7 +749,14 @@ class DequeMember:
         else:
             print(f'    {namespace}_{self.element}_new( elem );', file=body)
             print(f'    err = {namespace}_{self.element}_decode_limit( elem, ctx );', file=body)
-        print(f'    if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;', file=body)
+        print(f'    if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) {{', file=body)
+        if self.element not in simpletypes:
+            print( '        fd_bincode_destroy_ctx_t destroy_ctx = {.valloc = ctx->valloc};', file=body);
+
+            print(f'        {namespace}_{self.element}_destroy( elem, &destroy_ctx );', file=body)
+        print(f'        (void) {self.prefix()}_pop_tail_nocopy( self->{self.name} );', file=body);
+        print(f'        return err;', file=body)
+        print( '    }', file=body)
 
         print('  }', file=body)
 
@@ -767,7 +775,7 @@ class DequeMember:
             print(f'  {self.name}_cnt = fd_ulong_min( {self.name}_cnt, {self.max} );', file=body)
         print(f'  self->{self.name} = {self.prefix()}_alloc( ctx->valloc, {self.name}_cnt );', file=body)
 
-        print(f'  for( ulong i=0; i < {self.name}_cnt; i++ ) {{', file=body)
+        print(f'  for( ulong i=0; i < {self.name}_len; i++ ) {{', file=body)
         print(f'    {self.elem_type()} * elem = {self.prefix()}_push_tail_nocopy( self->{self.name} );', file=body);
 
         if self.element in simpletypes:

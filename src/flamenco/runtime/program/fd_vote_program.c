@@ -879,6 +879,9 @@ check_update_vote_state_slots_are_valid( fd_vote_state_t *           vote_state,
     }
   }
 
+  ulong cnt = deq_fd_vote_lockout_t_cnt(proposed_lockouts);
+  FD_LOG_WARNING(("%ld", cnt));
+
   /* must be nonempty, checked above */
   ulong last_vote_state_update_slot =
       deq_fd_vote_lockout_t_peek_tail_const( proposed_lockouts )->slot;
@@ -2167,7 +2170,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t ctx ) {
       .valloc  = fd_scratch_virtual()
   };
   int decode_result = fd_vote_instruction_decode_limit( &instruction, &decode );
-  if( decode_result != FD_BINCODE_SUCCESS)
+  if( ( decode_result != FD_BINCODE_SUCCESS ) && ( decode_result != FD_BINCODE_ERR_UNDERFLOW ) )
     return FD_EXECUTOR_INSTR_ERR_INVALID_INSTR_DATA;
 
   /* PLEASE PRESERVE SWITCH-CASE ORDERING TO MIRROR LABS IMPL:
