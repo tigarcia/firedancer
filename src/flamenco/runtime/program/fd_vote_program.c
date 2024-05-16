@@ -2158,14 +2158,16 @@ fd_vote_program_execute( fd_exec_instr_ctx_t ctx ) {
 
   // https://github.com/firedancer-io/solana/blob/da470eef4652b3b22598a1f379cacfe82bd5928d/programs/vote/src/vote_processor.rs#L73
   fd_vote_instruction_t   instruction;
+  ulong dsize = ctx.instr->data_sz;
+  if (dsize > FD_TXN_MTU)
+    dsize = FD_TXN_MTU;
   fd_bincode_decode_ctx_t decode = {
       .data    = ctx.instr->data,
-      .dataend = ctx.instr->data + ctx.instr->data_sz,
+      .dataend = ctx.instr->data + dsize,
       .valloc  = fd_scratch_virtual()
   };
-  int decode_result = fd_vote_instruction_decode( &instruction, &decode );
-  if( decode_result != FD_BINCODE_SUCCESS ||
-      (ulong)ctx.instr->data + 1232UL < (ulong)decode.data )
+  int decode_result = fd_vote_instruction_decode_limit( &instruction, &decode );
+  if( decode_result != FD_BINCODE_SUCCESS)
     return FD_EXECUTOR_INSTR_ERR_INVALID_INSTR_DATA;
 
   /* PLEASE PRESERVE SWITCH-CASE ORDERING TO MIRROR LABS IMPL:
