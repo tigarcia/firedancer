@@ -4,6 +4,10 @@
 #include "context/fd_exec_instr_ctx.h"
 #include "context/fd_exec_txn_ctx.h"
 
+#define FD_PUBKEY_ERR_NO_PDA_FOUND (-2)
+#define FD_PUBKEY_ERR_INVALID_PDA  (-1)
+#define FD_PUBKEY_SUCCESS          (0 )
+
 FD_PROTOTYPES_BEGIN
 
 int
@@ -13,6 +17,31 @@ fd_pubkey_create_with_seed( fd_exec_instr_ctx_t const * ctx,
                             ulong                       seed_sz,
                             uchar const                 owner[ static 32 ],
                             uchar                       out  [ static 32 ] );
+
+/* fd_pubkey_derive_pda mirrors the vm helper function fd_vm_derive_pda
+   to derive a PDA not on a ed25519 point.
+   TODO: Potentially replace with shared function in fd_vm_syscall_pda.c */
+
+int
+fd_pubkey_derive_pda( fd_pubkey_t const * program_id, 
+                      ulong               seeds_cnt, 
+                      uchar **            seeds, 
+                      uchar *             bump_seed, 
+                      fd_pubkey_t *       out );
+
+/* fd_pubkey_try_find_program_address mirrors the vm syscall function 
+   fd_vm_syscall_sol_try_find_program_address and creates a valid
+   program derived address searching for a valid ed25519 curve point by
+   iterating through 255 possible bump seeds. If any of the possible addresses
+   are on the curve then we know that it is not a valid PDA. 
+   TODO: Potentially replace with shared function in fd_vm_syscall_pda.c */
+
+int
+fd_pubkey_try_find_program_address( fd_pubkey_t const * program_id, 
+                                    ulong               seeds_cnt, 
+                                    uchar **            seeds,
+                                    fd_pubkey_t *       out );
+
 
 FD_PROTOTYPES_END
 
