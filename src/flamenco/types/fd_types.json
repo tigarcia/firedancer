@@ -839,6 +839,19 @@
       "comment": "https://github.com/anza-xyz/agave/blob/20ee70cd1829cd414d09040460defecf9792a370/sdk/program/src/vote/state/mod.rs#L990"
     },
     {
+      "name": "tower_sync",
+      "type": "struct",
+      "fields": [
+        { "name": "lockouts", "type": "deque", "element": "vote_lockout" },
+        { "name": "lockouts_cnt", "type": "ulong" },
+        { "name": "root", "type": "option", "element": "ulong", "flat": true },
+        { "name": "hash", "type": "hash" },
+        { "name": "timestamp", "type": "option", "element": "ulong", "flat": true },
+        { "name": "block_id", "type": "hash" }
+      ],
+      "comment": "https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_state/mod.rs#L185"
+    },
+    {
       "name": "tower_sync_switch",
       "type": "struct",
       "fields": [
