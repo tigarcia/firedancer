@@ -10049,16 +10049,16 @@ int fd_compact_vote_state_update_switch_encode( fd_compact_vote_state_update_swi
   return FD_BINCODE_SUCCESS;
 }
 
-int fd_tower_sync_decode( fd_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx ) {
+int fd_compact_tower_sync_decode( fd_compact_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx ) {
   void const * data = ctx->data;
-  int err = fd_tower_sync_decode_preflight( ctx );
+  int err = fd_compact_tower_sync_decode_preflight( ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   ctx->data = data;
-  fd_tower_sync_new( self );
-  fd_tower_sync_decode_unsafe( self, ctx );
+  fd_compact_tower_sync_new( self );
+  fd_compact_tower_sync_decode_unsafe( self, ctx );
   return FD_BINCODE_SUCCESS;
 }
-int fd_tower_sync_decode_preflight( fd_bincode_decode_ctx_t * ctx ) {
+int fd_compact_tower_sync_decode_preflight( fd_bincode_decode_ctx_t * ctx ) {
   int err;
   err = fd_bincode_uint64_decode_preflight( ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
@@ -10084,7 +10084,7 @@ int fd_tower_sync_decode_preflight( fd_bincode_decode_ctx_t * ctx ) {
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   return FD_BINCODE_SUCCESS;
 }
-int fd_tower_sync_decode_limit( fd_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx ) {
+int fd_compact_tower_sync_decode_limit( fd_compact_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx ) {
   int err;
   err = fd_bincode_uint64_decode_limit( &self->root, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
@@ -10122,7 +10122,7 @@ int fd_tower_sync_decode_limit( fd_tower_sync_t * self, fd_bincode_decode_ctx_t 
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   return FD_BINCODE_SUCCESS;
 }
-void fd_tower_sync_decode_unsafe( fd_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx ) {
+void fd_compact_tower_sync_decode_unsafe( fd_compact_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx ) {
   fd_bincode_uint64_decode_unsafe( &self->root, ctx );
   ushort lockout_offsets_len;
   fd_bincode_compact_u16_decode_unsafe( &lockout_offsets_len, ctx );
@@ -10146,7 +10146,7 @@ void fd_tower_sync_decode_unsafe( fd_tower_sync_t * self, fd_bincode_decode_ctx_
   }
   fd_hash_decode_unsafe( &self->block_id, ctx );
 }
-int fd_tower_sync_decode_offsets( fd_tower_sync_off_t * self, fd_bincode_decode_ctx_t * ctx ) {
+int fd_compact_tower_sync_decode_offsets( fd_compact_tower_sync_off_t * self, fd_bincode_decode_ctx_t * ctx ) {
   uchar const * data = ctx->data;
   int err;
   self->root_off = (uint)( (ulong)ctx->data - (ulong)data );
@@ -10178,12 +10178,12 @@ int fd_tower_sync_decode_offsets( fd_tower_sync_off_t * self, fd_bincode_decode_
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   return FD_BINCODE_SUCCESS;
 }
-void fd_tower_sync_new(fd_tower_sync_t * self) {
-  fd_memset( self, 0, sizeof(fd_tower_sync_t) );
+void fd_compact_tower_sync_new(fd_compact_tower_sync_t * self) {
+  fd_memset( self, 0, sizeof(fd_compact_tower_sync_t) );
   fd_hash_new( &self->hash );
   fd_hash_new( &self->block_id );
 }
-void fd_tower_sync_destroy( fd_tower_sync_t * self, fd_bincode_destroy_ctx_t * ctx ) {
+void fd_compact_tower_sync_destroy( fd_compact_tower_sync_t * self, fd_bincode_destroy_ctx_t * ctx ) {
   if( self->lockout_offsets ) {
     for( deq_fd_lockout_offset_t_iter_t iter = deq_fd_lockout_offset_t_iter_init( self->lockout_offsets ); !deq_fd_lockout_offset_t_iter_done( self->lockout_offsets, iter ); iter = deq_fd_lockout_offset_t_iter_next( self->lockout_offsets, iter ) ) {
       fd_lockout_offset_t * ele = deq_fd_lockout_offset_t_iter_ele( self->lockout_offsets, iter );
@@ -10199,11 +10199,11 @@ void fd_tower_sync_destroy( fd_tower_sync_t * self, fd_bincode_destroy_ctx_t * c
   fd_hash_destroy( &self->block_id, ctx );
 }
 
-ulong fd_tower_sync_footprint( void ){ return FD_TOWER_SYNC_FOOTPRINT; }
-ulong fd_tower_sync_align( void ){ return FD_TOWER_SYNC_ALIGN; }
+ulong fd_compact_tower_sync_footprint( void ){ return FD_COMPACT_TOWER_SYNC_FOOTPRINT; }
+ulong fd_compact_tower_sync_align( void ){ return FD_COMPACT_TOWER_SYNC_ALIGN; }
 
-void fd_tower_sync_walk( void * w, fd_tower_sync_t const * self, fd_types_walk_fn_t fun, const char *name, uint level ) {
-  fun( w, self, name, FD_FLAMENCO_TYPE_MAP, "fd_tower_sync", level++ );
+void fd_compact_tower_sync_walk( void * w, fd_compact_tower_sync_t const * self, fd_types_walk_fn_t fun, const char *name, uint level ) {
+  fun( w, self, name, FD_FLAMENCO_TYPE_MAP, "fd_compact_tower_sync", level++ );
   fun( w, &self->root, "root", FD_FLAMENCO_TYPE_ULONG, "ulong", level );
 
   /* Walk deque */
@@ -10226,9 +10226,9 @@ void fd_tower_sync_walk( void * w, fd_tower_sync_t const * self, fd_types_walk_f
     fun( w, &self->timestamp, "timestamp", FD_FLAMENCO_TYPE_ULONG, "ulong", level );
   }
   fd_hash_walk( w, &self->block_id, fun, "block_id", level );
-  fun( w, self, name, FD_FLAMENCO_TYPE_MAP_END, "fd_tower_sync", level-- );
+  fun( w, self, name, FD_FLAMENCO_TYPE_MAP_END, "fd_compact_tower_sync", level-- );
 }
-ulong fd_tower_sync_size( fd_tower_sync_t const * self ) {
+ulong fd_compact_tower_sync_size( fd_compact_tower_sync_t const * self ) {
   ulong size = 0;
   size += sizeof(ulong);
   if( self->lockout_offsets ) {
@@ -10250,7 +10250,7 @@ ulong fd_tower_sync_size( fd_tower_sync_t const * self ) {
   return size;
 }
 
-int fd_tower_sync_encode( fd_tower_sync_t const * self, fd_bincode_encode_ctx_t * ctx ) {
+int fd_compact_tower_sync_encode( fd_compact_tower_sync_t const * self, fd_bincode_encode_ctx_t * ctx ) {
   int err;
   err = fd_bincode_uint64_encode( self->root, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
@@ -10292,7 +10292,7 @@ int fd_tower_sync_switch_decode( fd_tower_sync_switch_t * self, fd_bincode_decod
 }
 int fd_tower_sync_switch_decode_preflight( fd_bincode_decode_ctx_t * ctx ) {
   int err;
-  err = fd_tower_sync_decode_preflight( ctx );
+  err = fd_compact_tower_sync_decode_preflight( ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   err = fd_hash_decode_preflight( ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
@@ -10300,21 +10300,21 @@ int fd_tower_sync_switch_decode_preflight( fd_bincode_decode_ctx_t * ctx ) {
 }
 int fd_tower_sync_switch_decode_limit( fd_tower_sync_switch_t * self, fd_bincode_decode_ctx_t * ctx ) {
   int err;
-  err = fd_tower_sync_decode_limit( &self->tower_sync, ctx );
+  err = fd_compact_tower_sync_decode_limit( &self->tower_sync, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   err = fd_hash_decode_limit( &self->hash, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   return FD_BINCODE_SUCCESS;
 }
 void fd_tower_sync_switch_decode_unsafe( fd_tower_sync_switch_t * self, fd_bincode_decode_ctx_t * ctx ) {
-  fd_tower_sync_decode_unsafe( &self->tower_sync, ctx );
+  fd_compact_tower_sync_decode_unsafe( &self->tower_sync, ctx );
   fd_hash_decode_unsafe( &self->hash, ctx );
 }
 int fd_tower_sync_switch_decode_offsets( fd_tower_sync_switch_off_t * self, fd_bincode_decode_ctx_t * ctx ) {
   uchar const * data = ctx->data;
   int err;
   self->tower_sync_off = (uint)( (ulong)ctx->data - (ulong)data );
-  err = fd_tower_sync_decode_preflight( ctx );
+  err = fd_compact_tower_sync_decode_preflight( ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   self->hash_off = (uint)( (ulong)ctx->data - (ulong)data );
   err = fd_hash_decode_preflight( ctx );
@@ -10323,11 +10323,11 @@ int fd_tower_sync_switch_decode_offsets( fd_tower_sync_switch_off_t * self, fd_b
 }
 void fd_tower_sync_switch_new(fd_tower_sync_switch_t * self) {
   fd_memset( self, 0, sizeof(fd_tower_sync_switch_t) );
-  fd_tower_sync_new( &self->tower_sync );
+  fd_compact_tower_sync_new( &self->tower_sync );
   fd_hash_new( &self->hash );
 }
 void fd_tower_sync_switch_destroy( fd_tower_sync_switch_t * self, fd_bincode_destroy_ctx_t * ctx ) {
-  fd_tower_sync_destroy( &self->tower_sync, ctx );
+  fd_compact_tower_sync_destroy( &self->tower_sync, ctx );
   fd_hash_destroy( &self->hash, ctx );
 }
 
@@ -10336,20 +10336,20 @@ ulong fd_tower_sync_switch_align( void ){ return FD_TOWER_SYNC_SWITCH_ALIGN; }
 
 void fd_tower_sync_switch_walk( void * w, fd_tower_sync_switch_t const * self, fd_types_walk_fn_t fun, const char *name, uint level ) {
   fun( w, self, name, FD_FLAMENCO_TYPE_MAP, "fd_tower_sync_switch", level++ );
-  fd_tower_sync_walk( w, &self->tower_sync, fun, "tower_sync", level );
+  fd_compact_tower_sync_walk( w, &self->tower_sync, fun, "tower_sync", level );
   fd_hash_walk( w, &self->hash, fun, "hash", level );
   fun( w, self, name, FD_FLAMENCO_TYPE_MAP_END, "fd_tower_sync_switch", level-- );
 }
 ulong fd_tower_sync_switch_size( fd_tower_sync_switch_t const * self ) {
   ulong size = 0;
-  size += fd_tower_sync_size( &self->tower_sync );
+  size += fd_compact_tower_sync_size( &self->tower_sync );
   size += fd_hash_size( &self->hash );
   return size;
 }
 
 int fd_tower_sync_switch_encode( fd_tower_sync_switch_t const * self, fd_bincode_encode_ctx_t * ctx ) {
   int err;
-  err = fd_tower_sync_encode( &self->tower_sync, ctx );
+  err = fd_compact_tower_sync_encode( &self->tower_sync, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
   err = fd_hash_encode( &self->hash, ctx );
   if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
@@ -13997,7 +13997,7 @@ int fd_vote_instruction_inner_decode_preflight( uint discriminant, fd_bincode_de
     return FD_BINCODE_SUCCESS;
   }
   case 14: {
-    err = fd_tower_sync_decode_preflight( ctx );
+    err = fd_compact_tower_sync_decode_preflight( ctx );
     if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
     return FD_BINCODE_SUCCESS;
   }
@@ -14081,7 +14081,7 @@ int fd_vote_instruction_inner_decode_limit( fd_vote_instruction_inner_t * self, 
     return FD_BINCODE_SUCCESS;
   }
   case 14: {
-    err = fd_tower_sync_decode_limit( &self->tower_sync, ctx );
+    err = fd_compact_tower_sync_decode_limit( &self->tower_sync, ctx );
     if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
     return FD_BINCODE_SUCCESS;
   }
@@ -14151,7 +14151,7 @@ void fd_vote_instruction_inner_decode_unsafe( fd_vote_instruction_inner_t * self
     break;
   }
   case 14: {
-    fd_tower_sync_decode_unsafe( &self->tower_sync, ctx );
+    fd_compact_tower_sync_decode_unsafe( &self->tower_sync, ctx );
     break;
   }
   case 15: {
@@ -14240,7 +14240,7 @@ void fd_vote_instruction_inner_new( fd_vote_instruction_inner_t * self, uint dis
     break;
   }
   case 14: {
-    fd_tower_sync_new( &self->tower_sync );
+    fd_compact_tower_sync_new( &self->tower_sync );
     break;
   }
   case 15: {
@@ -14311,7 +14311,7 @@ void fd_vote_instruction_inner_destroy( fd_vote_instruction_inner_t * self, uint
     break;
   }
   case 14: {
-    fd_tower_sync_destroy( &self->tower_sync, ctx );
+    fd_compact_tower_sync_destroy( &self->tower_sync, ctx );
     break;
   }
   case 15: {
@@ -14384,7 +14384,7 @@ void fd_vote_instruction_walk( void * w, fd_vote_instruction_t const * self, fd_
     break;
   }
   case 14: {
-    fd_tower_sync_walk( w, &self->inner.tower_sync, fun, "tower_sync", level );
+    fd_compact_tower_sync_walk( w, &self->inner.tower_sync, fun, "tower_sync", level );
     break;
   }
   case 15: {
@@ -14451,7 +14451,7 @@ ulong fd_vote_instruction_size( fd_vote_instruction_t const * self ) {
     break;
   }
   case 14: {
-    size += fd_tower_sync_size( &self->inner.tower_sync );
+    size += fd_compact_tower_sync_size( &self->inner.tower_sync );
     break;
   }
   case 15: {
@@ -14531,7 +14531,7 @@ int fd_vote_instruction_inner_encode( fd_vote_instruction_inner_t const * self, 
     break;
   }
   case 14: {
-    err = fd_tower_sync_encode( &self->tower_sync, ctx );
+    err = fd_compact_tower_sync_encode( &self->tower_sync, ctx );
     if( FD_UNLIKELY( err!=FD_BINCODE_SUCCESS ) ) return err;
     break;
   }

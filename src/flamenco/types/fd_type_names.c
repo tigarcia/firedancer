@@ -79,7 +79,7 @@ static char const * fd_type_names[FD_TYPE_NAME_COUNT] = {
  "fd_vote_state_update",
  "fd_compact_vote_state_update",
  "fd_compact_vote_state_update_switch",
- "fd_tower_sync",
+ "fd_compact_tower_sync",
  "fd_tower_sync_switch",
  "fd_slot_history_inner",
  "fd_slot_history_bitvec",

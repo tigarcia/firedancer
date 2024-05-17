@@ -1868,7 +1868,7 @@ deq_fd_lockout_offset_t_alloc( fd_valloc_t valloc, ulong max ) {
 }
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_state/mod.rs#L185 */
 /* Encoded Size: Dynamic */
-struct __attribute__((aligned(8UL))) fd_tower_sync {
+struct __attribute__((aligned(8UL))) fd_compact_tower_sync {
   ulong root;
   fd_lockout_offset_t * lockout_offsets; /* fd_deque_dynamic(min cnt 32,max cnt 100) */
   fd_hash_t hash;
@@ -1876,25 +1876,25 @@ struct __attribute__((aligned(8UL))) fd_tower_sync {
   uchar has_timestamp;
   fd_hash_t block_id;
 };
-typedef struct fd_tower_sync fd_tower_sync_t;
-#define FD_TOWER_SYNC_FOOTPRINT sizeof(fd_tower_sync_t)
-#define FD_TOWER_SYNC_ALIGN (8UL)
+typedef struct fd_compact_tower_sync fd_compact_tower_sync_t;
+#define FD_COMPACT_TOWER_SYNC_FOOTPRINT sizeof(fd_compact_tower_sync_t)
+#define FD_COMPACT_TOWER_SYNC_ALIGN (8UL)
 
-struct __attribute__((aligned(8UL))) fd_tower_sync_off {
+struct __attribute__((aligned(8UL))) fd_compact_tower_sync_off {
   uint root_off;
   uint lockout_offsets_off;
   uint hash_off;
   uint timestamp_off;
   uint block_id_off;
 };
-typedef struct fd_tower_sync_off fd_tower_sync_off_t;
-#define FD_TOWER_SYNC_OFF_FOOTPRINT sizeof(fd_tower_sync_off_t)
-#define FD_TOWER_SYNC_OFF_ALIGN (8UL)
+typedef struct fd_compact_tower_sync_off fd_compact_tower_sync_off_t;
+#define FD_COMPACT_TOWER_SYNC_OFF_FOOTPRINT sizeof(fd_compact_tower_sync_off_t)
+#define FD_COMPACT_TOWER_SYNC_OFF_ALIGN (8UL)
 
 /* https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_instruction.rs#L104 */
 /* Encoded Size: Dynamic */
 struct __attribute__((aligned(8UL))) fd_tower_sync_switch {
-  fd_tower_sync_t tower_sync;
+  fd_compact_tower_sync_t tower_sync;
   fd_hash_t hash;
 };
 typedef struct fd_tower_sync_switch fd_tower_sync_switch_t;
@@ -2591,7 +2591,7 @@ union fd_vote_instruction_inner {
   fd_vote_authorize_checked_with_seed_args_t authorize_checked_with_seed;
   fd_compact_vote_state_update_t compact_update_vote_state;
   fd_compact_vote_state_update_switch_t compact_update_vote_state_switch;
-  fd_tower_sync_t tower_sync;
+  fd_compact_tower_sync_t tower_sync;
   fd_tower_sync_switch_t tower_sync_switch;
 };
 typedef union fd_vote_instruction_inner fd_vote_instruction_inner_t;
@@ -5380,18 +5380,18 @@ ulong fd_compact_vote_state_update_switch_size( fd_compact_vote_state_update_swi
 ulong fd_compact_vote_state_update_switch_footprint( void );
 ulong fd_compact_vote_state_update_switch_align( void );
 
-void fd_tower_sync_new( fd_tower_sync_t * self );
-int fd_tower_sync_decode( fd_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx );
-int fd_tower_sync_decode_preflight( fd_bincode_decode_ctx_t * ctx );
-int fd_tower_sync_decode_limit( fd_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx );
-void fd_tower_sync_decode_unsafe( fd_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx );
-int fd_tower_sync_decode_offsets( fd_tower_sync_off_t * self, fd_bincode_decode_ctx_t * ctx );
-int fd_tower_sync_encode( fd_tower_sync_t const * self, fd_bincode_encode_ctx_t * ctx );
-void fd_tower_sync_destroy( fd_tower_sync_t * self, fd_bincode_destroy_ctx_t * ctx );
-void fd_tower_sync_walk( void * w, fd_tower_sync_t const * self, fd_types_walk_fn_t fun, const char *name, uint level );
-ulong fd_tower_sync_size( fd_tower_sync_t const * self );
-ulong fd_tower_sync_footprint( void );
-ulong fd_tower_sync_align( void );
+void fd_compact_tower_sync_new( fd_compact_tower_sync_t * self );
+int fd_compact_tower_sync_decode( fd_compact_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx );
+int fd_compact_tower_sync_decode_preflight( fd_bincode_decode_ctx_t * ctx );
+int fd_compact_tower_sync_decode_limit( fd_compact_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx );
+void fd_compact_tower_sync_decode_unsafe( fd_compact_tower_sync_t * self, fd_bincode_decode_ctx_t * ctx );
+int fd_compact_tower_sync_decode_offsets( fd_compact_tower_sync_off_t * self, fd_bincode_decode_ctx_t * ctx );
+int fd_compact_tower_sync_encode( fd_compact_tower_sync_t const * self, fd_bincode_encode_ctx_t * ctx );
+void fd_compact_tower_sync_destroy( fd_compact_tower_sync_t * self, fd_bincode_destroy_ctx_t * ctx );
+void fd_compact_tower_sync_walk( void * w, fd_compact_tower_sync_t const * self, fd_types_walk_fn_t fun, const char *name, uint level );
+ulong fd_compact_tower_sync_size( fd_compact_tower_sync_t const * self );
+ulong fd_compact_tower_sync_footprint( void );
+ulong fd_compact_tower_sync_align( void );
 
 void fd_tower_sync_switch_new( fd_tower_sync_switch_t * self );
 int fd_tower_sync_switch_decode( fd_tower_sync_switch_t * self, fd_bincode_decode_ctx_t * ctx );

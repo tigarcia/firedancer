@@ -827,7 +827,7 @@
       "comment": "https://github.com/solana-labs/solana/blob/252438e28fbfb2c695fe1215171b83456e4b761c/programs/vote/src/vote_instruction.rs#L143"
     },
     {
-      "name": "tower_sync",
+      "name": "compact_tower_sync",
       "type": "struct",
       "fields": [
         { "name": "root", "type": "ulong" },
@@ -836,13 +836,13 @@
         { "name": "timestamp", "type": "option", "element": "ulong", "flat": true },
         { "name": "block_id", "type": "hash" }
       ],
-      "comment": "https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_state/mod.rs#L185"
+      "comment": "https://github.com/anza-xyz/agave/blob/20ee70cd1829cd414d09040460defecf9792a370/sdk/program/src/vote/state/mod.rs#L990"
     },
     {
       "name": "tower_sync_switch",
       "type": "struct",
       "fields": [
-        { "name": "tower_sync", "type": "tower_sync" },
+        { "name": "tower_sync", "type": "compact_tower_sync" },
         { "name": "hash", "type": "hash" }
       ],
       "comment": "https://github.com/solana-labs/solana/blob/8f2c8b8388a495d2728909e30460aa40dcc5d733/programs/vote/src/vote_instruction.rs#L104"
@@ -1168,7 +1168,7 @@
         { "name": "authorize_checked_with_seed", "type": "vote_authorize_checked_with_seed_args" },
         { "name": "compact_update_vote_state", "type": "compact_vote_state_update"},
         { "name": "compact_update_vote_state_switch", "type": "compact_vote_state_update_switch"},
-        { "name": "tower_sync", "type": "tower_sync"},
+        { "name": "tower_sync", "type": "compact_tower_sync"},
         { "name": "tower_sync_switch", "type": "tower_sync_switch"}
       ],
       "comment": "https://github.com/firedancer-io/solana/blob/53a4e5d6c58b2ffe89b09304e4437f8ca198dadd/programs/vote/src/vote_instruction.rs#L21"
