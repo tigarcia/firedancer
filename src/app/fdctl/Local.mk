@@ -68,6 +68,8 @@ $(OBJDIR)/obj/app/fdctl/run/tiles/fd_metric.o: src/app/fdctl/run/tiles/generated
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_sign.o: src/app/fdctl/run/tiles/generated/sign_seccomp.h
 $(OBJDIR)/obj/app/fdctl/run/tiles/fd_repair.o: src/app/fdctl/run/tiles/generated/repair_seccomp.h
 
+$(call make-unit-test,count_ticks,count_ticks,fd_fdctl fd_util fd_ballet)
+
 # Phony target to always rerun cargo build ... it will detect if anything
 # changed on the library side.
 cargo-validator:
