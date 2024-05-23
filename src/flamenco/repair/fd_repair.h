@@ -41,7 +41,7 @@ typedef long (*fd_repair_serv_get_parent_fun)( ulong slot, void * arg );
 typedef void (*fd_repair_send_packet_fun)( uchar const * msg, size_t msglen, fd_repair_peer_addr_t const * addr, void * arg );
 
 /* Callback signing */
-typedef void (*fd_repair_sign_fun)( void * ctx, uchar * sig, uchar const * buffer, ulong len );
+typedef void (*fd_repair_sign_fun)( void * ctx, uchar * sig, uchar const * buffer, ulong len, int sign_type );
 
 /* Callback for when a request fails. Echoes back the request parameters. */
 typedef void (*fd_repair_shred_deliver_fail_fun)( fd_pubkey_t const * id, ulong slot, uint shred_index, void * arg, int reason );
@@ -105,7 +105,7 @@ void fd_repair_add_sticky( fd_repair_t * glob, fd_pubkey_t const * id );
 
 void fd_repair_set_permanent( fd_repair_t * glob, fd_pubkey_t const * id );
 
-void fd_repair_set_stake_weights( fd_repair_t * repair, 
+void fd_repair_set_stake_weights( fd_repair_t * repair,
                                   fd_stake_weight_t const * stake_weights,
                                   ulong stake_weights_cnt );
 
