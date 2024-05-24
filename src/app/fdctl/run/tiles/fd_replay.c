@@ -2,6 +2,11 @@
 
 #include "../../../../disco/tiles.h"
 
+#include "generated/replay_seccomp.h"
+#include "../../../../util/fd_util.h"
+#include "../../../../util/tile/fd_tile_private.h"
+#include "../../../../disco/metrics/fd_metrics.h"
+#include "../../../../disco/metrics/generated/fd_metrics_replay.h"
 #include "../../../../disco/shred/fd_stake_ci.h"
 #include "../../../../disco/topo/fd_pod_format.h"
 #include "../../../../disco/tvu/fd_replay.h"
@@ -634,6 +639,10 @@ after_credit( void *             _ctx,
 static void
 during_housekeeping( void * _ctx ) {
   fd_replay_tile_ctx_t * ctx = (fd_replay_tile_ctx_t *)_ctx;
+  FD_MCNT_SET( REPLAY, SNAPSHOT_STATUS_SNAPSHOT_BEGIN, 0 );
+  FD_MCNT_SET( REPLAY, SNAPSHOT_STATUS_SNAPSHOT_END,   0 );
+  FD_MCNT_SET( REPLAY, SNAPSHOT_STATUS_INCREMENTAL_BEGIN, 0 );
+  FD_MCNT_SET( REPLAY, SNAPSHOT_STATUS_INCREMENTAL_END,   0 );
   (void)ctx;
 }
 
