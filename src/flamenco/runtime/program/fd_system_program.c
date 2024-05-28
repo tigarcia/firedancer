@@ -147,8 +147,7 @@ fd_system_program_transfer( fd_exec_instr_ctx_t * ctx,
   return fd_system_program_transfer_verified( ctx, transfer_amount, from_acct_idx, to_acct_idx );
 }
 
-/* https://github.com/solana-labs/solana/blob/v1.17.22/programs/system/src/system_processor.rs#L71-L111
-
+/* https://github.com/anza-xyz/agave/blob/v1.18.14/programs/system/src/system_processor.rs#L70-L110
    Based on Solana Labs system_processor::allocate() */
 
 static int
@@ -161,15 +160,13 @@ fd_system_program_allocate( fd_exec_instr_ctx_t * ctx,
 
   fd_borrowed_account_t * account = ctx->instr->borrowed_accounts[ acct_idx ];
 
-  /* https://github.com/solana-labs/solana/blob/v1.17.22/programs/system/src/system_processor.rs#L78-L85 */
-
+  /* https://github.com/anza-xyz/agave/blob/v1.18.14/programs/system/src/system_processor.rs#L77 */
   if( FD_UNLIKELY( !fd_instr_any_signed( ctx->instr, authority ) ) ) {
     /* TODO Log: "Allocate 'to' account {:?} must sign" */
     return FD_EXECUTOR_INSTR_ERR_MISSING_REQUIRED_SIGNATURE;
   }
 
-  /* https://github.com/solana-labs/solana/blob/v1.17.22/programs/system/src/system_processor.rs#L87-L96 */
-
+  /* https://github.com/anza-xyz/agave/blob/v1.18.14/programs/system/src/system_processor.rs#L88 */
   if( FD_UNLIKELY( ( account->const_meta->dlen != 0UL ) |
                    ( 0!=memcmp( account->const_meta->info.owner, fd_solana_system_program_id.uc, 32UL ) ) ) ) {
     /* TODO Log: "Allocate: account {:?} already in use" */
@@ -177,16 +174,14 @@ fd_system_program_allocate( fd_exec_instr_ctx_t * ctx,
     return FD_EXECUTOR_INSTR_ERR_CUSTOM_ERR;
   }
 
-  /* https://github.com/solana-labs/solana/blob/v1.17.22/programs/system/src/system_processor.rs#L98-L106 */
-
+  /* https://github.com/anza-xyz/agave/blob/v1.18.14/programs/system/src/system_processor.rs#L97 */
   if( FD_UNLIKELY( space > FD_ACC_SZ_MAX ) ) {
     /* TODO Log: "Allocate: requested {}, max allowed {}" */
     ctx->txn_ctx->custom_err = FD_SYSTEM_PROGRAM_ERR_INVALID_ACCT_DATA_LEN;
     return FD_EXECUTOR_INSTR_ERR_CUSTOM_ERR;
   }
 
-  /* https://github.com/solana-labs/solana/blob/v1.17.22/programs/system/src/system_processor.rs#L108 */
-
+  /* https://github.com/anza-xyz/agave/blob/v1.18.14/programs/system/src/system_processor.rs#L107 */
   do {
     int err = FD_EXECUTOR_INSTR_ERR_FATAL;  /* 'FATAL', in case set_data_length doesn't initialize this value */
     int ok = fd_account_set_data_length( ctx, acct_idx, space, &err );
