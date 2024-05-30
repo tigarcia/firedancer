@@ -27,7 +27,9 @@
 #define WS_KEY_GUID_LEN ((WS_KEY_LEN) + (WS_GUID_LEN))
 #define WS_FIN 128
 #define WS_OPCODE_TEXT_FRAME 1
-#define WS_OPCODE_CON_CLOSE_FRAME 8
+#define WS_OPCODE_CLOSE_FRAME 8
+#define WS_OPCODE_PING_FRAME 9
+#define WS_OPCODE_PONG_FRAME 10
 #define SHA1HashSize 20
 
 static enum MHD_Result
@@ -152,7 +154,7 @@ send_all (MHD_socket sock, const unsigned char *buf, size_t len)
 }
 
 static ssize_t
-ws_send_frame (MHD_socket sock, const char *msg, size_t length)
+ws_send_frame (MHD_socket sock, const uchar type, const char *msg, size_t length)
 {
   unsigned char *response;
   unsigned char frame[10];
@@ -161,7 +163,7 @@ ws_send_frame (MHD_socket sock, const char *msg, size_t length)
   size_t output;
   size_t i;
 
-  frame[0] = (WS_FIN | WS_OPCODE_TEXT_FRAME);
+  frame[0] = (WS_FIN | type);
   if (length <= 125)
   {
     frame[1] = length & 0x7F;
@@ -225,9 +227,10 @@ ws_receive_frame (unsigned char *frame, ssize_t *length, int *type)
   int j;
 
   msg = NULL;
-  if (frame[0] == (WS_FIN | WS_OPCODE_TEXT_FRAME))
+  *type = frame[0] & 0x0F;
+  if (frame[0] == (WS_FIN | WS_OPCODE_TEXT_FRAME) ||
+      frame[0] == (WS_FIN | WS_OPCODE_PING_FRAME))
   {
-    *type = WS_OPCODE_TEXT_FRAME;
     idx_first_mask = 2;
     mask = frame[1];
     flength = mask & 0x7F;
@@ -256,14 +259,6 @@ ws_receive_frame (unsigned char *frame, ssize_t *length, int *type)
       msg[j] = '\0';
     }
   }
-  else if (frame[0] == (WS_FIN | WS_OPCODE_CON_CLOSE_FRAME))
-  {
-    *type = WS_OPCODE_CON_CLOSE_FRAME;
-  }
-  else
-  {
-    *type = frame[0] & 0x0F;
-  }
   return msg;
 }
 
@@ -275,11 +270,15 @@ epoll_selected( struct epoll_event * event ) {
 
   do {
     ssize_t got = recv (ws->sock, (void *) buf, sizeof (buf), 0);
-    if (0 >= got) break;
-    int type;
+    if (0 >= got) {
+      break;
+    }
+    int type = -1;
     char * msg = (char *)ws_receive_frame (buf, &got, &type);
-    if (NULL == msg) break;
     if (type == WS_OPCODE_TEXT_FRAME) {
+      if (NULL == msg) {
+        break;
+      }
       if( !fd_webserver_ws_request( ws, msg, (ulong)got ) ) {
         free( msg );
         break;
@@ -287,13 +286,14 @@ epoll_selected( struct epoll_event * event ) {
       free( msg );
       /* Happy path */
       return;
-    } else {
-      if (type == WS_OPCODE_CON_CLOSE_FRAME)
-      {
-        free (msg);
-        break;
-      }
+    } else if (type == WS_OPCODE_CLOSE_FRAME) {
+      break;
+    } else if (type == WS_OPCODE_PING_FRAME) {
+      ws_send_frame(ws->sock, WS_OPCODE_PONG_FRAME, msg, (ulong)got);
+      free( msg );
+      return;
     }
+    /* Unknown type */
   } while (0);
 
   fd_webserver_ws_closed(ws, ws->ws->cb_arg);

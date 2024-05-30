@@ -293,7 +293,7 @@ void fd_web_ws_simple_error( fd_websocket_ctx_t * ctx, const char* text, uint te
   ulong sz = fd_textstream_total_size(&ts);
   if ( sz <= sizeof(buf) ) {
     fd_textstream_get_output( &ts, buf );
-    ws_send_frame( ctx->sock, buf, sz );
+    ws_send_frame( ctx->sock, WS_OPCODE_TEXT_FRAME, buf, sz );
   }
 
   fd_textstream_destroy(&ts);
@@ -304,11 +304,11 @@ void fd_web_ws_reply( fd_websocket_ctx_t * ctx, fd_textstream_t * ts) {
   ulong sz = fd_textstream_total_size(ts);
   if ( sz <= sizeof(buf) ) {
     fd_textstream_get_output( ts, buf );
-    ws_send_frame( ctx->sock, buf, sz );
+    ws_send_frame( ctx->sock, WS_OPCODE_TEXT_FRAME, buf, sz );
   } else {
     char * buf2 = malloc(sz);
     fd_textstream_get_output( ts, buf2 );
-    ws_send_frame( ctx->sock, buf2, sz );
+    ws_send_frame( ctx->sock, WS_OPCODE_TEXT_FRAME, buf2, sz );
     free( buf2 );
   }
 }
