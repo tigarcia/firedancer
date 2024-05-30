@@ -302,13 +302,13 @@ void fd_web_ws_simple_error( fd_websocket_ctx_t * ctx, const char* text, uint te
 void fd_web_ws_reply( fd_websocket_ctx_t * ctx, fd_textstream_t * ts) {
   char buf[2048];
   ulong sz = fd_textstream_total_size(ts);
-  if ( sz <= sizeof(buf) ) {
-    fd_textstream_get_output( ts, buf );
-    ws_send_frame( ctx->sock, WS_OPCODE_TEXT_FRAME, buf, sz );
+  if ( sz + WS_MAX_HDR_SIZE <= sizeof(buf) ) {
+    fd_textstream_get_output( ts, buf + WS_MAX_HDR_SIZE );
+    ws_send_frame_prepend_hdr( ctx->sock, WS_OPCODE_TEXT_FRAME, buf + WS_MAX_HDR_SIZE, sz );
   } else {
-    char * buf2 = malloc(sz);
-    fd_textstream_get_output( ts, buf2 );
-    ws_send_frame( ctx->sock, WS_OPCODE_TEXT_FRAME, buf2, sz );
+    char * buf2 = malloc(sz + WS_MAX_HDR_SIZE);
+    fd_textstream_get_output( ts, buf2 + WS_MAX_HDR_SIZE );
+    ws_send_frame_prepend_hdr( ctx->sock, WS_OPCODE_TEXT_FRAME, buf2 + WS_MAX_HDR_SIZE, sz );
     free( buf2 );
   }
 }

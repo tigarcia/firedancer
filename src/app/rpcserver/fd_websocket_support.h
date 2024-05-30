@@ -202,6 +202,47 @@ ws_send_frame (MHD_socket sock, const uchar type, const char *msg, size_t length
   return (ssize_t) output;
 }
 
+#define WS_MAX_HDR_SIZE 10U
+
+static ssize_t
+ws_send_frame_prepend_hdr(MHD_socket sock, const uchar type, char * msg, size_t length)
+{
+  uchar * frame;
+  size_t tot_length;
+  if (length <= 125)
+  {
+    frame = (uchar*)msg - 2;
+    frame[0] = (WS_FIN | type);
+    frame[1] = length & 0x7F;
+    tot_length = length + 2;
+  }
+  else if (0xFFFF < length)
+  {
+    frame = (uchar*)msg - 10;
+    frame[0] = (WS_FIN | type);
+    frame[1] = 127;
+    frame[2] = (unsigned char) ((length >> 56) & 0xFF);
+    frame[3] = (unsigned char) ((length >> 48) & 0xFF);
+    frame[4] = (unsigned char) ((length >> 40) & 0xFF);
+    frame[5] = (unsigned char) ((length >> 32) & 0xFF);
+    frame[6] = (unsigned char) ((length >> 24) & 0xFF);
+    frame[7] = (unsigned char) ((length >> 16) & 0xFF);
+    frame[8] = (unsigned char) ((length >> 8) & 0xFF);
+    frame[9] = (unsigned char) (length & 0xFF);
+    tot_length = length + 10;
+  }
+  else
+  {
+    frame = (uchar*)msg - 4;
+    frame[0] = (WS_FIN | type);
+    frame[1] = 126;
+    frame[2] = (length >> 8) & 0xFF;
+    frame[3] = length & 0xFF;
+    tot_length = length + 4;
+  }
+  return (ssize_t) send_all (sock, frame, tot_length);
+}
+
 static unsigned char *
 ws_receive_frame (unsigned char *frame, ssize_t *length, int *type)
 {
