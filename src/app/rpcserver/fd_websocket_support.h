@@ -1,5 +1,8 @@
 #include <openssl/sha.h>
 
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#pragma GCC diagnostic ignored "-Wrestrict"
+
 #define BAD_REQUEST_PAGE                                                \
   "<html>\n"                                                            \
   "<head>\n"                                                            \
