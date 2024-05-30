@@ -159,9 +159,7 @@ ws_send_frame (MHD_socket sock, const uchar type, const char *msg, size_t length
   unsigned char *response;
   unsigned char frame[10];
   unsigned char idx_first_rdata;
-  size_t idx_response;
-  size_t output;
-  size_t i;
+  unsigned char buf[1<<13];
 
   frame[0] = (WS_FIN | type);
   if (length <= 125)
@@ -169,7 +167,6 @@ ws_send_frame (MHD_socket sock, const uchar type, const char *msg, size_t length
     frame[1] = length & 0x7F;
     idx_first_rdata = 2;
   }
-#if SIZEOF_SIZE_T > 4
   else if (0xFFFF < length)
   {
     frame[1] = 127;
@@ -183,7 +180,6 @@ ws_send_frame (MHD_socket sock, const uchar type, const char *msg, size_t length
     frame[9] = (unsigned char) (length & 0xFF);
     idx_first_rdata = 10;
   }
-#endif /* SIZEOF_SIZE_T > 4 */
   else
   {
     frame[1] = 126;
@@ -191,25 +187,18 @@ ws_send_frame (MHD_socket sock, const uchar type, const char *msg, size_t length
     frame[3] = length & 0xFF;
     idx_first_rdata = 4;
   }
-  idx_response = 0;
-  response = malloc (idx_first_rdata + length + 1);
+  if( idx_first_rdata + length <= sizeof( buf ) )
+    response = buf;
+  else
+    response = malloc (idx_first_rdata + length);
   if (NULL == response)
   {
     return -1;
   }
-  for (i = 0; i < idx_first_rdata; i++)
-  {
-    response[i] = frame[i];
-    idx_response++;
-  }
-  for (i = 0; i < length; i++)
-  {
-    response[idx_response] = (unsigned char) msg[i];
-    idx_response++;
-  }
-  response[idx_response] = '\0';
-  output = send_all (sock, response, idx_response);
-  free (response);
+  memcpy(response, frame, idx_first_rdata);
+  memcpy(response + idx_first_rdata, msg, length);
+  size_t output = send_all (sock, response, idx_first_rdata + length);
+  if( response != buf ) free (response);
   return (ssize_t) output;
 }
 
