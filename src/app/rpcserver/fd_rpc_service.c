@@ -1868,7 +1868,7 @@ ws_method_accountSubscribe_update(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * ms
         val_sz = (ulong)len;
     }
 
-    fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":{\"data\":[\"",
+    fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"method\":\"accountNotification\",\"params\":{\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":{\"data\":[\"",
                           msg->acct_saved.funk_xid.ul[0]);
 
     if (val_sz) {
@@ -1894,7 +1894,7 @@ ws_method_accountSubscribe_update(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * ms
     fd_base58_encode_32((uchar*)metadata->info.owner, 0, owner);
     char addr[50];
     fd_base58_encode_32(sub->acct_subscribe.acct.uc, 0, addr);
-    fd_textstream_sprintf(ts, "\"],\"executable\":%s,\"lamports\":%lu,\"owner\":\"%s\",\"address\":\"%s\",\"rentEpoch\":%lu,\"space\":%lu}},\"subscription\":%lu}" CRLF,
+    fd_textstream_sprintf(ts, "\"],\"executable\":%s,\"lamports\":%lu,\"owner\":\"%s\",\"address\":\"%s\",\"rentEpoch\":%lu,\"space\":%lu}},\"subscription\":%lu}}" CRLF,
                           (metadata->info.executable ? "true" : "false"),
                           metadata->info.lamports,
                           owner,
