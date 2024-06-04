@@ -451,10 +451,7 @@ fd_blockstore_slot_remove( fd_blockstore_t * blockstore, ulong slot ) {
           fd_blockstore_txn_map_remove( txn_map, txn_map_entry );
         }
       }
-      if( block->shreds_gaddr ) fd_alloc_free( alloc, fd_wksp_laddr_fast( wksp, block->shreds_gaddr ) );
       if( block->txns_gaddr )   fd_alloc_free( alloc, txns );
-      if( block->data_gaddr && block->data_gaddr != ULONG_MAX )
-        fd_alloc_free( alloc, data );
     }
   }
   fd_blockstore_slot_map_remove( slot_map, slot_entry );
@@ -545,21 +542,23 @@ fd_blockstore_deshred( fd_blockstore_t * blockstore, ulong slot ) {
   }
 
   // alloc mem for the block
+  ulong data_off = fd_ulong_align_up( sizeof(fd_block_t), 128UL );
+  ulong shred_off = fd_ulong_align_up( data_off + block_sz, alignof( fd_block_shred_t ) );
+  ulong tot_sz = shred_off + sizeof( fd_block_shred_t ) * shreds_cnt;
+
   fd_alloc_t *       alloc        = fd_blockstore_alloc( blockstore );
   fd_wksp_t *        wksp         = fd_blockstore_wksp( blockstore );
-  fd_block_t *       block        = fd_alloc_malloc( alloc, alignof( fd_block_t ), sizeof( fd_block_t ) );
+  fd_block_t *       block        = fd_alloc_malloc( alloc, 128UL, tot_sz );
 
+  fd_memset( block, 0, sizeof(fd_block_t) );
   block->ts           = fd_log_wallclock();
 
-  uchar * data_laddr  = fd_alloc_malloc( alloc, 128UL, block_sz );
+  uchar * data_laddr  = (uchar *)((ulong)block + data_off);
   block->data_gaddr   = fd_wksp_gaddr_fast( wksp, data_laddr );
   block->data_sz      = block_sz;
-  fd_block_shred_t * shreds_laddr = fd_alloc_malloc(
-      alloc, alignof( fd_block_shred_t ), sizeof( fd_block_shred_t ) * shreds_cnt );
+  fd_block_shred_t * shreds_laddr = (fd_block_shred_t *)((ulong)block + shred_off);
   block->shreds_gaddr = fd_wksp_gaddr_fast( wksp, shreds_laddr );
   block->shreds_cnt   = shreds_cnt;
-  block->txns_gaddr   = 0;
-  block->txns_cnt     = 0;
 
   /* deshred the shreds into the block mem */
   fd_deshredder_t    deshredder = { 0 };
@@ -614,6 +613,7 @@ fd_blockstore_deshred( fd_blockstore_t * blockstore, ulong slot ) {
   case FD_SHRED_ESLOT:
     fd_blockstore_scan_block( blockstore, slot, block );
     /* Do this last when it's safe */
+    FD_COMPILER_MFENCE();
     slot_entry->block_gaddr = fd_wksp_gaddr_fast( wksp, block );
     return FD_BLOCKSTORE_OK;
   case FD_SHRED_EBATCH:
@@ -634,8 +634,6 @@ fd_blockstore_deshred( fd_blockstore_t * blockstore, ulong slot ) {
 fail_deshred:
   /* We failed to deshred the block. Throw it away, and try again from scratch. */
   FD_LOG_WARNING( ( "removing slot %lu due to error %d", slot, err ) );
-  fd_alloc_free( alloc, shreds_laddr );
-  fd_alloc_free( alloc, data_laddr );
   fd_alloc_free( alloc, block );
   fd_blockstore_slot_remove( blockstore, slot );
   for( uint i = 0; i < shreds_cnt; i++ ) {
@@ -837,7 +835,7 @@ fd_blockstore_shred_query_copy_data( fd_blockstore_t * blockstore, ulong slot, u
   }
   if( tot_sz >= FD_SHRED_MIN_SZ ) return (long)tot_sz;
   /* Zero pad */
-  memset( (uchar*)buf + tot_sz, 0, FD_SHRED_MIN_SZ - tot_sz );
+  fd_memset( (uchar*)buf + tot_sz, 0, FD_SHRED_MIN_SZ - tot_sz );
   return (long)FD_SHRED_MIN_SZ;
 }
 
