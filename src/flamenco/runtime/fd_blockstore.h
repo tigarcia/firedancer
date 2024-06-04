@@ -135,7 +135,7 @@ typedef struct fd_block_txn_ref fd_block_txn_ref_t;
 
 /* If the 0th bit is set, this indicates the block is prepared, and about to be executed.
    Blockstore clients should be careful not to modify or remove blocks while this flag is set.
-   
+
    The remaining flags are mainly metadata. */
 #define FD_BLOCK_FLAG_PREPARED  0 /* xxxxxxx1 */
 #define FD_BLOCK_FLAG_PROCESSED 1 /* xxxxxx1x */
@@ -153,7 +153,7 @@ struct fd_block {
   long      ts;         /* timestamp in nanosecs */
   ulong     height;     /* block height */
   fd_hash_t bank_hash;
-  uchar     flags;
+  fd_hash_t last_micro_hash;
 
   /* data region
 
@@ -169,8 +169,6 @@ struct fd_block {
   ulong data_sz;      /* block size */
   ulong shreds_gaddr; /* ptr to the list of fd_blockstore_shred_t */
   ulong shreds_cnt;
-  ulong micros_gaddr; /* ptr to the list of fd_blockstore_micro_t */
-  ulong micros_cnt;
   ulong txns_gaddr; /* ptr to the list of fd_blockstore_txn_ref_t */
   ulong txns_cnt;
 };
@@ -180,7 +178,8 @@ struct fd_blockstore_slot_map {
   ulong          slot;
   uint           hash;
   fd_slot_meta_t slot_meta;
-  fd_block_t     block;
+  uchar          flags;
+  ulong          block_gaddr;
 };
 typedef struct fd_blockstore_slot_map fd_blockstore_slot_map_t;
 
