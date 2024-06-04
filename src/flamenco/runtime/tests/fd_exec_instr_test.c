@@ -700,6 +700,17 @@ _diff_effects( fd_exec_instr_fixture_diff_t * check ) {
       _unexpected_acct_modify_locally( check, acct );
   }
 
+  /* Check return data */
+  if (expected->return_data->size != ctx->txn_ctx->return_data.len) {
+    check->has_diff = 1;
+    REPORTV( WARNING, "expected return data size %lu, got %lu",
+             (ulong) expected->return_data->size, ctx->txn_ctx->return_data.len );
+  }
+  else if (expected->return_data->size > 0 ) {
+    check->has_diff = memcmp( expected->return_data->bytes, ctx->txn_ctx->return_data.data, expected->return_data->size );
+    REPORT( WARNING, "return data mismatch" );
+  }
+
   /* TODO: Capture account side effects outside of the access list by
            looking at the funk record delta (technically a scheduling
            violation) */
@@ -851,6 +862,17 @@ fd_exec_instr_test_run( fd_exec_instr_test_runner_t *        runner,
     fd_funk_rec_t * rec = fd_funk_rec_modify( funk, rec_ );
     fd_funk_rec_remove( funk, rec, 1 );
   }
+
+  /* Capture return data */
+  fd_txn_return_data_t * return_data = &ctx->txn_ctx->return_data;
+  effects->return_data = FD_SCRATCH_ALLOC_APPEND(l, alignof(pb_bytes_array_t),
+                              PB_BYTES_ARRAY_T_ALLOCSIZE( return_data->len ) );
+  if( FD_UNLIKELY( _l > output_end ) ) {
+    _context_destroy( runner, ctx );
+    return 0UL;
+  }
+  effects->return_data->size = (pb_size_t)return_data->len;
+  fd_memcpy( effects->return_data->bytes, return_data->data, return_data->len );
 
   /* TODO verify that there are no outstanding funk records */
 

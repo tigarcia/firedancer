@@ -374,7 +374,7 @@ then
 
   # create prune here
   mismatch_slot=$(grep "Bank hash mismatch!" "$LOG" | tail -n 1 | awk -F'slot=' '{print $2}' | awk '{print $1}')
-  prune_start_slot=$((mismatch_slot - 100))
+  prune_start_slot=$((mismatch_slot - 1))
   prune_end_slot=$((mismatch_slot + 100))
 
   prune_status=1
@@ -396,7 +396,7 @@ then
       --checkpt-funk $PRUNE_PATH \
       --funk-only 1 \
       --txn-max 100 \
-      $PAGES \
+      --page-cnt 10 \
       $FUNK_PAGES \
       $PRUNED_PAGES \
       $PRUNED_IMAX \
