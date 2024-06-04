@@ -250,9 +250,9 @@ fd_store_tile_slot_prepare( fd_store_tile_ctx_t * ctx,
   if( ctx->store->curr_turbine_slot >= slot
       && memcmp( ctx->identity_key, slot_leader, sizeof(fd_pubkey_t) ) == 0 ) {
     if( store_slot_prepare_mode == FD_STORE_SLOT_PREPARE_CONTINUE ) {
-      uchar * block_flags = fd_blockstore_block_flags_query( ctx->blockstore, slot );
-      if( FD_LIKELY( block_flags ) ) {
-        *block_flags = fd_uchar_set_bit( *block_flags, FD_BLOCK_FLAG_PROCESSED );
+      fd_block_t * block = fd_blockstore_block_query( ctx->blockstore, slot );
+      if( FD_LIKELY( block ) ) {
+        block->flags = fd_uchar_set_bit( block->flags, FD_BLOCK_FLAG_PROCESSED );
       }
     } else {
       return;

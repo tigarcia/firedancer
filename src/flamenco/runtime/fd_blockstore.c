@@ -437,8 +437,8 @@ fd_blockstore_slot_remove( fd_blockstore_t * blockstore, ulong slot ) {
                  slot_entry->slot_meta.consumed == slot_entry->slot_meta.last_index ) ) {
     fd_blockstore_txn_map_t * txn_map = fd_wksp_laddr_fast( wksp, blockstore->txn_map_gaddr );
     fd_block_t *              block   = fd_wksp_laddr_fast( wksp, slot_entry->block_gaddr );
-    if( FD_LIKELY( !( fd_uchar_extract_bit( slot_entry->flags, FD_BLOCK_FLAG_PREPARED ) |
-                      fd_uchar_extract_bit( slot_entry->flags, FD_BLOCK_FLAG_SNAPSHOT ) ) ) ) {
+    if( FD_LIKELY( !( fd_uchar_extract_bit( block->flags, FD_BLOCK_FLAG_PREPARED ) |
+                      fd_uchar_extract_bit( block->flags, FD_BLOCK_FLAG_SNAPSHOT ) ) ) ) {
       uchar *              data = fd_wksp_laddr_fast( wksp, block->data_gaddr );
       fd_block_txn_ref_t * txns = fd_wksp_laddr_fast( wksp, block->txns_gaddr );
       for( ulong j = 0; j < block->txns_cnt; ++j ) {
@@ -682,7 +682,6 @@ fd_blockstore_shred_insert( fd_blockstore_t * blockstore, fd_shred_t const * shr
     if( FD_UNLIKELY( !slot_entry ) ) return FD_BLOCKSTORE_ERR_SLOT_FULL;
 
     /* zero-out the block */
-    slot_entry->flags = 0;
     slot_entry->block_gaddr = 0;
 
     /* zero-out the slot meta */
@@ -872,14 +871,6 @@ fd_blockstore_slot_meta_query( fd_blockstore_t * blockstore, ulong slot ) {
   return &query->slot_meta;
 }
 
-uchar *
-fd_blockstore_block_flags_query( fd_blockstore_t * blockstore, ulong slot ) {
-  fd_blockstore_slot_map_t * query =
-      fd_blockstore_slot_map_query( fd_blockstore_slot_map( blockstore ), slot, NULL );
-  if( FD_UNLIKELY( !query ) ) return NULL;
-  return &query->flags;
-}
-
 ulong
 fd_blockstore_parent_slot_query( fd_blockstore_t * blockstore, ulong slot ) {
   fd_blockstore_slot_map_t * query =
@@ -1039,7 +1030,6 @@ fd_blockstore_snapshot_insert( fd_blockstore_t * blockstore, fd_slot_bank_t cons
   block->data_gaddr = ULONG_MAX;
   block->height    = snapshot_slot_bank->block_height;
   block->bank_hash = snapshot_slot_bank->banks_hash;
-
   uchar flags[8] = {
       FD_BLOCK_FLAG_PROCESSED,
       FD_BLOCK_FLAG_EQV_SAFE,
@@ -1050,6 +1040,6 @@ fd_blockstore_snapshot_insert( fd_blockstore_t * blockstore, fd_slot_bank_t cons
       FD_BLOCK_FLAG_SNAPSHOT,
   };
   for( ulong i = 0; i < sizeof( flags ); i++ ) {
-    slot_entry->flags = fd_uchar_set_bit( slot_entry->flags, flags[i] );
+    block->flags = fd_uchar_set_bit( block->flags, flags[i] );
   }
 }

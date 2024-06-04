@@ -154,6 +154,7 @@ struct fd_block {
   ulong     height;     /* block height */
   fd_hash_t bank_hash;
   fd_hash_t last_micro_hash;
+  uchar     flags;
 
   /* data region
 
@@ -178,7 +179,6 @@ struct fd_blockstore_slot_map {
   ulong          slot;
   uint           hash;
   fd_slot_meta_t slot_meta;
-  uchar          flags;
   ulong          block_gaddr;
 };
 typedef struct fd_blockstore_slot_map fd_blockstore_slot_map_t;
@@ -459,11 +459,6 @@ fd_blockstore_bank_hash_query( fd_blockstore_t * blockstore, ulong slot );
    blockstore. The returned pointer lifetime is until the slot meta is removed. */
 fd_slot_meta_t *
 fd_blockstore_slot_meta_query( fd_blockstore_t * blockstore, ulong slot );
-
-/* Query blockstore for execution flags at slot. Returns a pointer to the flags or NULL if not in
-   blockstore. The returned pointer lifetime is until the slot is removed. */
-uchar *
-fd_blockstore_block_flags_query( fd_blockstore_t * blockstore, ulong slot );
 
 /* Query the parent slot of slot. */
 ulong
