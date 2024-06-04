@@ -205,11 +205,11 @@ fd_replay_slot_prepare( fd_replay_t * replay, ulong slot ) {
   ulong re_adds[2];
   uint  re_adds_cnt = 0;
 
-  fd_block_t * block = fd_blockstore_block_query( replay->blockstore, slot );
+  uchar * block_flags = fd_blockstore_block_flags_query( replay->blockstore, slot );
 
   /* We already executed this block */
 
-  if( FD_UNLIKELY( block && fd_uchar_extract_bit( block->flags, FD_BLOCK_FLAG_PROCESSED ) ) ) {
+  if( FD_UNLIKELY( block_flags && fd_uchar_extract_bit( *block_flags, FD_BLOCK_FLAG_PROCESSED ) ) ) {
     goto end;
   }
 
@@ -252,7 +252,8 @@ fd_replay_slot_prepare( fd_replay_t * replay, ulong slot ) {
 
   /* Check if the parent is processed (executed) yet. */
 
-  if( FD_UNLIKELY( !fd_uchar_extract_bit( parent_block->flags, FD_BLOCK_FLAG_PROCESSED ) ) ) {
+  uchar * parent_block_flags = fd_blockstore_block_flags_query( replay->blockstore, parent_slot );
+  if( FD_UNLIKELY( !fd_uchar_extract_bit( *parent_block_flags, FD_BLOCK_FLAG_PROCESSED ) ) ) {
     re_adds[re_adds_cnt++] = slot;
     re_adds[re_adds_cnt++] = parent_slot;
     goto end;
@@ -260,6 +261,7 @@ fd_replay_slot_prepare( fd_replay_t * replay, ulong slot ) {
 
   /* Check if the block is still incomplete. Ask for the remaining shreds. */
 
+  fd_block_t * block = fd_blockstore_block_query( replay->blockstore, slot );
   if( FD_UNLIKELY( !block ) ) {
     fd_replay_slot_repair( replay, slot );
     re_adds[re_adds_cnt++] = slot;
@@ -303,7 +305,7 @@ fd_replay_slot_prepare( fd_replay_t * replay, ulong slot ) {
 
   /* Mark the block as prepared, and thus unsafe to remove. */
 
-  block->flags = fd_uchar_set_bit( block->flags, FD_BLOCK_FLAG_PREPARED );
+  *block_flags = fd_uchar_set_bit( *block_flags, FD_BLOCK_FLAG_PREPARED );
 
   /* Block data ptr remains valid outside of the rw lock for the lifetime of the block alloc. */
 
@@ -355,7 +357,8 @@ fd_replay_slot_execute( fd_replay_t *      replay,
 
   fd_block_t * block_ = fd_blockstore_block_query( replay->blockstore, slot );
   if( FD_LIKELY( block_ ) ) {
-    block_->flags = fd_uchar_set_bit( block_->flags, FD_BLOCK_FLAG_PROCESSED );
+    uchar * block_flags = fd_blockstore_block_flags_query( replay->blockstore, slot );
+    *block_flags = fd_uchar_set_bit( *block_flags, FD_BLOCK_FLAG_PROCESSED );
     memcpy( &block_->bank_hash, &fork->slot_ctx.slot_bank.banks_hash, sizeof( fd_hash_t ) );
   }
 
@@ -443,15 +446,15 @@ fd_replay_slot_repair( fd_replay_t * replay, ulong slot ) {
       fd_repair_need_highest_window_index( replay->repair, slot, (uint)last_index );
     }
 
-    /* First make sure we are ready to execute this blook soon. Look for an ancestor that was
+    /* First make sure we are ready to execute this block soon. Look for an ancestor that was
        executed. */
 
     ulong anc_slot = slot;
     int   good     = 0;
     for( uint i = 0; i < 3; ++i ) {
       anc_slot               = fd_blockstore_parent_slot_query( replay->blockstore, anc_slot );
-      fd_block_t * anc_block = fd_blockstore_block_query( replay->blockstore, anc_slot );
-      if( anc_block && fd_uchar_extract_bit( anc_block->flags, FD_BLOCK_FLAG_PROCESSED ) ) {
+      uchar * anc_block_flags = fd_blockstore_block_flags_query( replay->blockstore, anc_slot );
+      if( anc_block_flags && fd_uchar_extract_bit( *anc_block_flags, FD_BLOCK_FLAG_PROCESSED ) ) {
         good = 1;
         break;
       }

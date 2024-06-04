@@ -872,6 +872,14 @@ fd_blockstore_slot_meta_query( fd_blockstore_t * blockstore, ulong slot ) {
   return &query->slot_meta;
 }
 
+uchar *
+fd_blockstore_block_flags_query( fd_blockstore_t * blockstore, ulong slot ) {
+  fd_blockstore_slot_map_t * query =
+      fd_blockstore_slot_map_query( fd_blockstore_slot_map( blockstore ), slot, NULL );
+  if( FD_UNLIKELY( !query ) ) return NULL;
+  return &query->flags;
+}
+
 ulong
 fd_blockstore_parent_slot_query( fd_blockstore_t * blockstore, ulong slot ) {
   fd_blockstore_slot_map_t * query =

@@ -460,6 +460,11 @@ fd_blockstore_bank_hash_query( fd_blockstore_t * blockstore, ulong slot );
 fd_slot_meta_t *
 fd_blockstore_slot_meta_query( fd_blockstore_t * blockstore, ulong slot );
 
+/* Query blockstore for execution flags at slot. Returns a pointer to the flags or NULL if not in
+   blockstore. The returned pointer lifetime is until the slot is removed. */
+uchar *
+fd_blockstore_block_flags_query( fd_blockstore_t * blockstore, ulong slot );
+
 /* Query the parent slot of slot. */
 ulong
 fd_blockstore_parent_slot_query( fd_blockstore_t * blockstore, ulong slot );

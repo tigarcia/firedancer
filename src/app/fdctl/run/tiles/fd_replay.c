@@ -193,9 +193,9 @@ during_frag( void * _ctx,
   }
 
   fd_blockstore_start_read( ctx->replay->blockstore );
-  fd_block_t * block_ = fd_blockstore_block_query( ctx->replay->blockstore, ctx->curr_slot );
-  if( FD_LIKELY( block_ ) ) {
-    if( fd_uchar_extract_bit( block_->flags, FD_BLOCK_FLAG_PROCESSED ) ) {
+  uchar * block_flags = fd_blockstore_block_flags_query( ctx->replay->blockstore, ctx->curr_slot );
+  if( FD_LIKELY( block_flags ) ) {
+    if( fd_uchar_extract_bit( *block_flags, FD_BLOCK_FLAG_PROCESSED ) ) {
       *opt_filter = 1;
     }
   }
@@ -319,8 +319,9 @@ after_frag( void *             _ctx,
       fd_blockstore_start_write( ctx->replay->blockstore );
 
       fd_block_t * block_ = fd_blockstore_block_query( ctx->replay->blockstore, ctx->curr_slot );
+      uchar * block_flags = fd_blockstore_block_flags_query( ctx->replay->blockstore, ctx->curr_slot );
       if( FD_LIKELY( block_ ) ) {
-        block_->flags = fd_uchar_set_bit( block_->flags, FD_BLOCK_FLAG_PROCESSED );
+        *block_flags = fd_uchar_set_bit( *block_flags, FD_BLOCK_FLAG_PROCESSED );
         memcpy( &block_->bank_hash, &fork->slot_ctx.slot_bank.banks_hash, sizeof( fd_hash_t ) );
       }
 
