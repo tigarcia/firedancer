@@ -437,6 +437,9 @@ fd_blockstore_slot_remove( fd_blockstore_t * blockstore, ulong slot ) {
                  slot_entry->slot_meta.consumed == slot_entry->slot_meta.last_index ) ) {
     fd_blockstore_txn_map_t * txn_map = fd_wksp_laddr_fast( wksp, blockstore->txn_map_gaddr );
     fd_block_t *              block   = fd_wksp_laddr_fast( wksp, slot_entry->block_gaddr );
+    /* DO THIS FIRST FOR THREAD SAFETY */
+    FD_COMPILER_MFENCE();
+    slot_entry->block_gaddr = 0;
     if( FD_LIKELY( !( fd_uchar_extract_bit( block->flags, FD_BLOCK_FLAG_PREPARED ) |
                       fd_uchar_extract_bit( block->flags, FD_BLOCK_FLAG_SNAPSHOT ) ) ) ) {
       uchar *              data = fd_wksp_laddr_fast( wksp, block->data_gaddr );
