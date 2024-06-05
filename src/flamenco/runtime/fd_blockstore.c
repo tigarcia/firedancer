@@ -437,6 +437,7 @@ fd_blockstore_slot_remove( fd_blockstore_t * blockstore, ulong slot ) {
         }
       }
       if( block->txns_gaddr )   fd_alloc_free( alloc, txns );
+      fd_alloc_free( alloc, block );
     }
   }
   fd_blockstore_slot_map_remove( slot_map, &slot );
