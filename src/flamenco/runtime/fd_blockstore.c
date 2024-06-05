@@ -549,8 +549,12 @@ fd_blockstore_deshred( fd_blockstore_t * blockstore, ulong slot ) {
   fd_alloc_t *       alloc        = fd_blockstore_alloc( blockstore );
   fd_wksp_t *        wksp         = fd_blockstore_wksp( blockstore );
   fd_block_t *       block        = fd_alloc_malloc( alloc, 128UL, tot_sz );
+  if( FD_UNLIKELY( block == NULL ) ) {
+    return FD_BLOCKSTORE_ERR_SLOT_FULL;
+  }
 
   fd_memset( block, 0, sizeof(fd_block_t) );
+  block->tot_sz       = tot_sz;
   block->ts           = fd_log_wallclock();
 
   uchar * data_laddr  = (uchar *)((ulong)block + data_off);
@@ -812,6 +816,7 @@ fd_blockstore_shred_query_copy_data( fd_blockstore_t * blockstore, ulong slot, u
       fd_blockstore_shred_map_ele_query( shred_map, &key, NULL, shred_pool );
   if( shred ) {
     ulong sz = fd_shred_sz( &shred->hdr );
+    if( sz > buf_max ) return -1;
     fd_memcpy( buf, shred->raw, sz);
     return (long)sz;
   }
@@ -820,12 +825,13 @@ fd_blockstore_shred_query_copy_data( fd_blockstore_t * blockstore, ulong slot, u
       fd_blockstore_slot_map_query( fd_blockstore_slot_map( blockstore ), slot, NULL );
   if( FD_UNLIKELY( !query || query->block_gaddr == 0 ) ) return -1;
   if( shred_idx > query->slot_meta.last_index ) return -1;
-  fd_block_t * blk = fd_wksp_laddr_fast( fd_blockstore_wksp( blockstore ), query->block_gaddr );
-  fd_block_shred_t * shreds = fd_wksp_laddr_fast( fd_blockstore_wksp( blockstore ), blk->shreds_gaddr );
+  fd_wksp_t * wksp = fd_blockstore_wksp( blockstore );
+  fd_block_t * blk = fd_wksp_laddr_fast( wksp, query->block_gaddr );
+  fd_block_shred_t * shreds = fd_wksp_laddr_fast( wksp, blk->shreds_gaddr );
   ulong sz = fd_shred_payload_sz( &shreds[shred_idx].hdr );
   if( FD_SHRED_DATA_HEADER_SZ + sz > buf_max ) return -1L;
   fd_memcpy( buf, &shreds[shred_idx].hdr, FD_SHRED_DATA_HEADER_SZ );
-  fd_memcpy( (uchar*)buf + FD_SHRED_DATA_HEADER_SZ, fd_blockstore_block_data_laddr( blockstore, blk ) + shreds[shred_idx].off, sz );
+  fd_memcpy( (uchar*)buf + FD_SHRED_DATA_HEADER_SZ, (uchar*)fd_wksp_laddr_fast( wksp, blk->data_gaddr ) + shreds[shred_idx].off, sz );
   ulong tot_sz = FD_SHRED_DATA_HEADER_SZ + sz;
   ulong merkle_sz = shreds[shred_idx].merkle_sz;
   if( merkle_sz ) {
@@ -1021,9 +1027,10 @@ fd_blockstore_snapshot_insert( fd_blockstore_t * blockstore, fd_slot_bank_t cons
 
   /* fake the snapshot block. */
 
-  fd_alloc_t * alloc = fd_wksp_laddr_fast( fd_wksp_containing( blockstore ), blockstore->alloc_gaddr );
+  fd_wksp_t  *  wksp = fd_blockstore_wksp( blockstore );
+  fd_alloc_t * alloc = fd_wksp_laddr_fast( wksp, blockstore->alloc_gaddr );
   fd_block_t * block = fd_alloc_malloc( alloc, alignof( fd_block_t ), sizeof( fd_block_t ) );
-  slot_entry->block_gaddr = fd_wksp_gaddr_fast( fd_wksp_containing( blockstore ), block );
+  slot_entry->block_gaddr = fd_wksp_gaddr_fast( wksp, block );
   fd_memset( block, 0, sizeof( fd_block_t ) );
   block->data_gaddr = ULONG_MAX;
   block->height    = snapshot_slot_bank->block_height;

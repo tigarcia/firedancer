@@ -166,11 +166,12 @@ struct fd_block {
   Note random access of individual shred indices is not performant, due to the variable-length
   nature of shreds. */
 
+  ulong tot_sz;       /* total size of block allocation */
   ulong data_gaddr;   /* ptr to the beginning of the block's allocated data region */
   ulong data_sz;      /* block size */
   ulong shreds_gaddr; /* ptr to the list of fd_blockstore_shred_t */
   ulong shreds_cnt;
-  ulong txns_gaddr; /* ptr to the list of fd_blockstore_txn_ref_t */
+  ulong txns_gaddr;   /* ptr to the list of fd_blockstore_txn_ref_t */
   ulong txns_cnt;
 };
 typedef struct fd_block fd_block_t;
