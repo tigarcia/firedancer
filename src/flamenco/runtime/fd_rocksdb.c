@@ -439,7 +439,7 @@ fd_rocksdb_copy_over_txn_status_range( fd_rocksdb_t *    src,
 
   for ( ulong slot = start_slot; slot <= end_slot; ++slot ) {
     FD_LOG_NOTICE(("fd_rocksdb_copy_over_txn_status_range: %d", slot));
-    fd_blockstore_slot_map_t * block_entry = fd_blockstore_slot_map_query( block_map, slot, NULL );
+    fd_blockstore_slot_map_t * block_entry = fd_blockstore_slot_map_query( block_map, &slot, NULL );
     if( FD_LIKELY( block_entry && block_entry->block_gaddr ) ) {
       fd_block_t * blk = fd_wksp_laddr_fast( wksp, block_entry->block_gaddr );
       uchar * data = fd_wksp_laddr_fast( wksp, blk->data_gaddr );
@@ -588,7 +588,7 @@ fd_rocksdb_import_block_blockstore( fd_rocksdb_t *    db,
 
   fd_wksp_t * wksp = fd_wksp_containing( blockstore );
   fd_blockstore_slot_map_t * block_map = fd_blockstore_slot_map( blockstore );
-  fd_blockstore_slot_map_t * block_entry = fd_blockstore_slot_map_query( block_map, slot, NULL );
+  fd_blockstore_slot_map_t * block_entry = fd_blockstore_slot_map_query( block_map, &slot, NULL );
   if( FD_LIKELY( block_entry && block_entry->block_gaddr ) ) {
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, block_entry->block_gaddr );
     size_t vallen = 0;
@@ -676,7 +676,7 @@ fd_rocksdb_import_block_blockstore( fd_rocksdb_t *    db,
       for ( ulong j = 0; j < blk->txns_cnt; ++j ) {
         fd_blockstore_txn_key_t sig;
         fd_memcpy( &sig, data + txns[j].id_off, sizeof( sig ) );
-        fd_blockstore_txn_map_t * txn_map_entry = fd_blockstore_txn_map_query( txn_map, sig, NULL );
+        fd_blockstore_txn_map_t * txn_map_entry = fd_blockstore_txn_map_query( txn_map, &sig, NULL );
         if( FD_UNLIKELY( !txn_map_entry ) ) {
           FD_LOG_WARNING(("missing transaction %64J", &sig));
           continue;
