@@ -266,66 +266,48 @@ int fd_txn_to_json( fd_textstream_t * ts,
 
 int fd_block_to_json( fd_textstream_t * ts,
                       long call_id,
-                      fd_blockstore_t * blks,
-                      ulong slot,
+                      fd_block_t * blk,
+                      const uchar * blk_data,
+                      ulong blk_sz,
+                      fd_slot_meta_t * meta,
                       fd_rpc_encoding_t encoding,
                       long maxvers,
                       enum fd_block_detail detail,
                       int rewards) {
-  fd_blockstore_start_read( blks );
-
-  fd_block_t * blk = fd_blockstore_block_query(blks, slot);
-  if (blk == NULL) {
-    fd_blockstore_end_read( blks );
-    return -1;
-  }
-
-  fd_slot_meta_t * meta = fd_blockstore_slot_meta_query(blks, slot);
-
-  uchar const * block = fd_blockstore_block_data_laddr(blks, blk);
-  ulong block_sz = blk->data_sz;
-
-  FD_LOG_DEBUG(("converting ptr %p, sz %lu", (void *)block, block_sz));
-
   EMIT_SIMPLE("{\"jsonrpc\":\"2.0\",\"result\":{");
 
   if ( meta ) {
     fd_textstream_sprintf(ts, "\"blockHeight\":%lu,\"blockTime\":%ld,\"blockhash\":\"",
                           blk->height, blk->ts/(long)1e9);
-    fd_hash_t const * hash = fd_blockstore_block_hash_query( blks, slot );
-    if (hash)
-      fd_textstream_encode_base58(ts, hash->hash, FD_SHA256_HASH_SZ);
-    fd_textstream_sprintf(ts, "\",\"parentSlot\":%lu,\"previousBlockhash\":\"",
+    fd_hash_t const * hash = &blk->last_micro_hash;
+    fd_textstream_encode_base58(ts, hash->hash, FD_SHA256_HASH_SZ);
+    fd_textstream_sprintf(ts, "\",\"parentSlot\":%lu,",
                           meta->parent_slot);
-    hash = fd_blockstore_block_hash_query( blks, meta->parent_slot );
-    if (hash)
-      fd_textstream_encode_base58(ts, hash->hash, FD_SHA256_HASH_SZ);
-    fd_textstream_sprintf(ts, "\",");
   }
 
   EMIT_SIMPLE("\"transactions\":[");
 
   int first_txn = 1;
   ulong blockoff = 0;
-  while (blockoff < block_sz) {
-    if ( blockoff + sizeof(ulong) > block_sz )
+  while (blockoff < blk_sz) {
+    if ( blockoff + sizeof(ulong) > blk_sz )
       FD_LOG_ERR(("premature end of block"));
-    ulong mcount = *(const ulong *)((const uchar *)block + blockoff);
+    ulong mcount = *(const ulong *)(blk_data + blockoff);
     blockoff += sizeof(ulong);
 
     /* Loop across microblocks */
     for (ulong mblk = 0; mblk < mcount; ++mblk) {
-      if ( blockoff + sizeof(fd_microblock_hdr_t) > block_sz )
+      if ( blockoff + sizeof(fd_microblock_hdr_t) > blk_sz )
         FD_LOG_ERR(("premature end of block"));
-      fd_microblock_hdr_t * hdr = (fd_microblock_hdr_t *)((const uchar *)block + blockoff);
+      fd_microblock_hdr_t * hdr = (fd_microblock_hdr_t *)((const uchar *)blk_data + blockoff);
       blockoff += sizeof(fd_microblock_hdr_t);
 
       /* Loop across transactions */
       for ( ulong txn_idx = 0; txn_idx < hdr->txn_cnt; txn_idx++ ) {
         uchar txn_out[FD_TXN_MAX_SZ];
         ulong pay_sz = 0;
-        const uchar* raw = (const uchar *)block + blockoff;
-        ulong txn_sz = fd_txn_parse_core(raw, fd_ulong_min(block_sz - blockoff, FD_TXN_MTU), txn_out, NULL, &pay_sz, 0);
+        const uchar* raw = (const uchar *)blk_data + blockoff;
+        ulong txn_sz = fd_txn_parse_core(raw, fd_ulong_min(blk_sz - blockoff, FD_TXN_MTU), txn_out, NULL, &pay_sz, 0);
         if ( txn_sz == 0 || txn_sz > FD_TXN_MAX_SZ )
           FD_LOG_ERR( ( "failed to parse transaction %lu in microblock %lu",
                         txn_idx,
@@ -354,7 +336,6 @@ int fd_block_to_json( fd_textstream_t * ts,
 
         int r = fd_txn_to_json( ts, (fd_txn_t *)txn_out, raw, val2, val2_sz, encoding, maxvers, detail, rewards );
         if ( r ) {
-          fd_blockstore_end_read( blks );
           return r;
         }
 
@@ -364,14 +345,12 @@ int fd_block_to_json( fd_textstream_t * ts,
       }
     }
   }
-  if ( blockoff != block_sz )
+  if ( blockoff != blk_sz )
     FD_LOG_ERR(("garbage at end of block"));
 
   EMIT_SIMPLE("]"); // transactions
 
   fd_textstream_sprintf(ts, "},\"id\":%lu}", call_id);
-
-  fd_blockstore_end_read( blks );
 
   return 0;
 }

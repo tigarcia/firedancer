@@ -880,6 +880,50 @@ fd_blockstore_next_slot_query( fd_blockstore_t * blockstore, ulong slot , ulong 
   return FD_BLOCKSTORE_OK;
 }
 
+uchar *
+  fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out ) {
+  fd_wksp_t * wksp = fd_blockstore_wksp( blockstore );
+  fd_blockstore_slot_map_t const * slot_map = fd_wksp_laddr_fast( wksp, blockstore->slot_map_gaddr );
+  for(;;) {
+    uint seqnum = blockstore->lock.seqnum;
+    FD_COMPILER_MFENCE();
+
+    fd_blockstore_slot_map_t const * query = fd_blockstore_slot_map_query_safe( slot_map, &slot, NULL );
+    if( FD_UNLIKELY( !query ) ) return NULL;
+    fd_memcpy( slot_meta_out, &query->slot_meta, sizeof( fd_slot_meta_t ) );
+    ulong blk_gaddr = query->block_gaddr;
+
+    FD_COMPILER_MFENCE();
+    if( seqnum != blockstore->lock.seqnum ) continue;
+    FD_COMPILER_MFENCE();
+
+    if( FD_UNLIKELY( !blk_gaddr ) ) return NULL;
+    fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
+    fd_memcpy( blk_out, blk, sizeof(fd_block_t) );
+    ulong ptr = blk->data_gaddr;
+    if( FD_UNLIKELY( !ptr || ptr == ULONG_MAX ) ) return NULL;
+    ulong sz = *data_sz_out = blk->data_sz;
+    if( sz >= FD_SHRED_MAX_PER_SLOT * FD_SHRED_MAX_SZ ) continue;
+
+    FD_COMPILER_MFENCE();
+    if( seqnum != blockstore->lock.seqnum ) continue;
+    FD_COMPILER_MFENCE();
+
+    uchar * data_out = fd_valloc_malloc( alloc, 8UL, sz );
+    if( FD_UNLIKELY( data_out == NULL ) ) return NULL;
+    fd_memcpy( data_out, fd_wksp_laddr_fast( wksp, ptr ), sz );
+
+    FD_COMPILER_MFENCE();
+    if( seqnum != blockstore->lock.seqnum ) {
+      fd_valloc_free( alloc, data_out );
+      continue;
+    }
+
+    return data_out;
+  }
+}
+
+
 fd_blockstore_txn_map_t *
 fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ] ) {
   fd_blockstore_txn_key_t key;

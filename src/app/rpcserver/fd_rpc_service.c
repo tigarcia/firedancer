@@ -406,18 +406,31 @@ method_getBlock(struct fd_web_replier* replier, struct json_values* values, fd_r
   ulong rewards_sz = 0;
   const void* rewards = json_get_value(values, PATH_REWARDS, 4, &rewards_sz);
 
+  fd_block_t blk[1];
+  fd_slot_meta_t slot_meta[1];
+  ulong blk_sz;
+  uchar * blk_data = fd_blockstore_block_query_safe( ctx->blockstore, slotn, fd_libc_alloc_virtual(), blk, slot_meta, &blk_sz );
+  if( blk_data == NULL ) {
+    fd_web_replier_error(replier, "failed to display block for slot %lu", slotn);
+    return 0;
+  }
+
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
   if (fd_block_to_json(ts,
                        ctx->call_id,
-                       ctx->blockstore,
-                       slotn,
+                       blk,
+                       blk_data,
+                       blk_sz,
+                       slot_meta,
                        enc,
                        (maxvers == NULL ? 0 : *(const long*)maxvers),
                        det,
                        (rewards == NULL ? 1 : *(const int*)rewards))) {
+    free( blk_data );
     fd_web_replier_error(replier, "failed to display block for slot %lu", slotn);
     return 0;
   }
+  free( blk_data );
   fd_web_replier_done(replier);
   return 0;
 }

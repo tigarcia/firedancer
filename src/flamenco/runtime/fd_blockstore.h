@@ -468,6 +468,12 @@ fd_blockstore_block_frontier_query( fd_blockstore_t * blockstore,
                                     ulong *           parents,
                                     ulong             parents_sz );
 
+/* Query the block data and meta in a thread-safe manner which will
+   not block writes. The data and meta is copied out into memory
+   allocated with the given alloc. A NULL is returned on error. */
+uchar *
+fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out );
+
 /* Query the transaction data for the given signature */
 fd_blockstore_txn_map_t *
 fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ] );
