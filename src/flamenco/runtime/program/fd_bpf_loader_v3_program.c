@@ -103,7 +103,7 @@ read_bpf_upgradeable_loader_state_for_program( fd_exec_txn_ctx_t *              
     return NULL;
   }
 
-  return rec->const_meta;  /* UGLY!!!!! */
+  return rec->const_meta;
 }
 
 /* https://github.com/anza-xyz/agave/blob/574bae8fefc0ed256b55340b9d87b7689bcdf222/programs/bpf_loader/src/lib.rs#L105-L171 */
@@ -111,6 +111,7 @@ int
 deploy_program( fd_exec_instr_ctx_t * instr_ctx,
                 uchar * const         programdata,
                 ulong                 programdata_size ) {   
+  bool deploy_mode = true;
   fd_sbpf_syscalls_t * syscalls = fd_sbpf_syscalls_new( fd_scratch_alloc( fd_sbpf_syscalls_align(),
                                                                           fd_sbpf_syscalls_footprint() ) );
   if( FD_UNLIKELY( !syscalls ) ) {
@@ -121,7 +122,7 @@ deploy_program( fd_exec_instr_ctx_t * instr_ctx,
 
   /* Load executable */
   fd_sbpf_elf_info_t  _elf_info[ 1UL ];
-  fd_sbpf_elf_info_t * elf_info = fd_sbpf_elf_peek( _elf_info, programdata, programdata_size );
+  fd_sbpf_elf_info_t * elf_info = fd_sbpf_elf_peek( _elf_info, programdata, programdata_size, deploy_mode );
   if( FD_UNLIKELY( !elf_info ) ) {
     FD_LOG_WARNING(( "Elf info failing" ));
     return FD_EXECUTOR_INSTR_ERR_INVALID_ACC_DATA;
@@ -142,7 +143,7 @@ deploy_program( fd_exec_instr_ctx_t * instr_ctx,
   } 
 
   /* Load program */
-  if( FD_UNLIKELY( fd_sbpf_program_load( prog, programdata, programdata_size, syscalls ) ) ) {
+  if( FD_UNLIKELY( fd_sbpf_program_load( prog, programdata, programdata_size, syscalls, deploy_mode ) ) ) {
     FD_LOG_ERR(( "fd_sbpf_program_load() failed: %s", fd_sbpf_strerror() ));
   }
 
@@ -1328,7 +1329,7 @@ process_loader_upgradeable_instruction( fd_exec_instr_ctx_t * instr_ctx ) {
     }
 
     err = 0;
-    if( FD_UNLIKELY( !fd_account_set_data_length2( instr_ctx, programdata_account->meta, programdata_account->pubkey, new_len, 0, &err ) ) ) {
+    if( FD_UNLIKELY( !fd_account_set_data_length( instr_ctx, 0UL, new_len, &err ) ) ) {
       return err;
     }
 
