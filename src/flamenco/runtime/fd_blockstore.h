@@ -474,6 +474,11 @@ fd_blockstore_block_frontier_query( fd_blockstore_t * blockstore,
 uchar *
 fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out );
 
+/* Query the block meta data in a thread-safe manner which will
+   not block writes. The meta is copied out. */
+int
+fd_blockstore_meta_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out );
+
 /* Query the transaction data for the given signature */
 fd_blockstore_txn_map_t *
 fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ] );

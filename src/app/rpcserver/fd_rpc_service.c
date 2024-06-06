@@ -450,9 +450,11 @@ static int
 method_getBlockHeight(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void) values;
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
-  fd_block_t * blk = fd_blockstore_block_query(ctx->blockstore, ctx->blockstore->smr);
+  fd_block_t blk[1];
+  fd_slot_meta_t slot_meta[1];
+  int ret = fd_blockstore_meta_query_safe(ctx->blockstore, ctx->blockstore->smr, blk, slot_meta);
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":%lu,\"id\":%lu}" CRLF,
-                        (blk ? blk->height : 0UL), ctx->call_id);
+                        (!ret ? blk->height : 0UL), ctx->call_id);
   fd_web_replier_done(replier);
   return 0;
 }
@@ -497,19 +499,19 @@ method_getBlocks(struct fd_web_replier* replier, struct json_values* values, fd_
   if (endslotn > ctx->blockstore->max)
     endslotn = ctx->blockstore->max;
 
-  fd_blockstore_start_read( ctx->blockstore );
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":[");
   uint cnt = 0;
   for ( ulong i = startslotn; i <= endslotn && cnt < 500000U; ++i ) {
-    fd_block_t * blk = fd_blockstore_block_query(ctx->blockstore, i);
-    if (blk != NULL) {
+    fd_block_t blk[1];
+    fd_slot_meta_t slot_meta[1];
+    int ret = fd_blockstore_meta_query_safe(ctx->blockstore, i, blk, slot_meta);
+    if (!ret) {
       fd_textstream_sprintf(ts, "%s%lu", (cnt==0 ? "" : ","), i);
       ++cnt;
     }
   }
   fd_textstream_sprintf(ts, "],\"id\":%lu}" CRLF, ctx->call_id);
-  fd_blockstore_end_read( ctx->blockstore );
 
   fd_web_replier_done(replier);
   return 0;
@@ -550,19 +552,19 @@ method_getBlocksWithLimit(struct fd_web_replier* replier, struct json_values* va
   if (limitn > 500000)
     limitn = 500000;
 
-  fd_blockstore_start_read( ctx->blockstore );
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":[");
   uint cnt = 0;
   for ( ulong i = startslotn; i <= ctx->blockstore->max && cnt < limitn; ++i ) {
-    fd_block_t * blk = fd_blockstore_block_query(ctx->blockstore, i);
-    if (blk != NULL) {
+    fd_block_t blk[1];
+    fd_slot_meta_t slot_meta[1];
+    int ret = fd_blockstore_meta_query_safe(ctx->blockstore, i, blk, slot_meta);
+    if (!ret) {
       fd_textstream_sprintf(ts, "%s%lu", (cnt==0 ? "" : ","), i);
       ++cnt;
     }
   }
   fd_textstream_sprintf(ts, "],\"id\":%lu}" CRLF, ctx->call_id);
-  fd_blockstore_end_read( ctx->blockstore );
 
   fd_web_replier_done(replier);
   return 0;
@@ -644,10 +646,12 @@ method_getEpochInfo(struct fd_web_replier* replier, struct json_values* values, 
     ulong slot_idx = 0;
     ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, ctx->blockstore->smr, &slot_idx );
     ulong slots_per_epoch = fd_epoch_slot_cnt( &epoch_bank->epoch_schedule, epoch );
-    fd_block_t * blk = fd_blockstore_block_query( ctx->blockstore, ctx->blockstore->smr );
+    fd_block_t blk[1];
+    fd_slot_meta_t slot_meta[1];
+    int ret = fd_blockstore_meta_query_safe(ctx->blockstore, ctx->blockstore->smr, blk, slot_meta);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"absoluteSlot\":%lu,\"blockHeight\":%lu,\"epoch\":%lu,\"slotIndex\":%lu,\"slotsInEpoch\":%lu,\"transactionCount\":%lu},\"id\":%lu}" CRLF,
                           ctx->blockstore->smr,
-                          (blk ? blk->height : 0UL),
+                          (!ret ? blk->height : 0UL),
                           epoch,
                           slot_idx,
                           slots_per_epoch,

@@ -52,6 +52,7 @@ init_args( int * argc, char *** argv, fd_rpcserver_args_t * args ) {
   }
   FD_LOG_NOTICE(( "blockstore has slot min=%lu smr=%lu max=%lu",
                   args->blockstore->min, args->blockstore->smr, args->blockstore->max ));
+  fd_wksp_mprotect( wksp, 1 );
 
   wksp_name = fd_env_strip_cmdline_cstr ( argc, argv, "--wksp-name-replay-notify", NULL, "fd1_replay_notif.wksp" );
   FD_LOG_NOTICE(( "attaching to workspace \"%s\"", wksp_name ));
