@@ -483,6 +483,11 @@ fd_blockstore_meta_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_bloc
 fd_blockstore_txn_map_t *
 fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ] );
 
+/* Query the transaction data for the given signature in a thread
+ * safe manner */
+int
+fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, uchar * txn_data_out );
+
 /* Remove slot from blockstore, including all relevant internal structures. */
 int
 fd_blockstore_slot_remove( fd_blockstore_t * blockstore, ulong slot );

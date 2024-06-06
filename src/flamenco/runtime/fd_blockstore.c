@@ -961,6 +961,54 @@ fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED2551
       NULL );
 }
 
+int
+fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, uchar * txn_data_out ) {
+  fd_wksp_t * wksp = fd_blockstore_wksp( blockstore );
+  fd_blockstore_slot_map_t const * slot_map = fd_wksp_laddr_fast( wksp, blockstore->slot_map_gaddr );
+  fd_blockstore_txn_map_t * txn_map = fd_wksp_laddr_fast( wksp, blockstore->txn_map_gaddr );
+  for(;;) {
+    uint seqnum = blockstore->lock.seqnum;
+    FD_COMPILER_MFENCE();
+
+    fd_blockstore_txn_key_t key;
+    fd_memcpy( &key, sig, sizeof( key ) );
+    fd_blockstore_txn_map_t * txn_map_entry = fd_blockstore_txn_map_query( txn_map, &key, NULL );
+    if( FD_UNLIKELY( txn_map_entry == NULL ) ) return FD_BLOCKSTORE_ERR_TXN_MISSING;
+    fd_memcpy( txn_out, txn_map_entry, sizeof(fd_blockstore_txn_map_t) );
+
+    FD_COMPILER_MFENCE();
+    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( txn_data_out == NULL ) return FD_BLOCKSTORE_OK;
+    FD_COMPILER_MFENCE();
+
+    fd_blockstore_slot_map_t const * query = fd_blockstore_slot_map_query_safe( slot_map, &txn_out->slot, NULL );
+    if( FD_UNLIKELY( !query ) ) return FD_BLOCKSTORE_ERR_TXN_MISSING;
+    ulong blk_gaddr = query->block_gaddr;
+    if( FD_UNLIKELY( !blk_gaddr ) ) return FD_BLOCKSTORE_ERR_TXN_MISSING;
+
+    FD_COMPILER_MFENCE();
+    if( seqnum != blockstore->lock.seqnum ) continue;
+    FD_COMPILER_MFENCE();
+
+    fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
+    ulong ptr = blk->data_gaddr;
+    ulong sz = blk->data_sz;
+    if( txn_out->offset + txn_out->sz > sz ) continue;
+
+    FD_COMPILER_MFENCE();
+    if( seqnum != blockstore->lock.seqnum ) continue;
+    FD_COMPILER_MFENCE();
+
+    uchar const * data = fd_wksp_laddr_fast( wksp, ptr );
+    fd_memcpy( txn_data_out, data + txn_out->offset, txn_out->sz );
+
+    FD_COMPILER_MFENCE();
+    if( seqnum != blockstore->lock.seqnum ) continue;
+
+    return FD_BLOCKSTORE_OK;
+  }
+}
+
 void
 fd_blockstore_block_height_set( fd_blockstore_t * blockstore, ulong slot, ulong block_height ) {
   fd_block_t * query = fd_blockstore_block_query( blockstore, slot );
