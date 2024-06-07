@@ -882,6 +882,12 @@ fd_blockstore_next_slot_query( fd_blockstore_t * blockstore, ulong slot , ulong 
 
 uchar *
   fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out ) {
+  /* WARNING: this code is extremely delicate. Do NOT modify without
+     understanding all the invariants. In particular, we must never
+     dereference through a corrupt pointer. It's OK for the
+     destination data to be overwritten/invalid as long as the memory
+     location is valid. As long as we don't crash, we can validate the
+     data after it is read. */
   fd_wksp_t * wksp = fd_blockstore_wksp( blockstore );
   fd_blockstore_slot_map_t const * slot_map = fd_wksp_laddr_fast( wksp, blockstore->slot_map_gaddr );
   for(;;) {
@@ -895,7 +901,7 @@ uchar *
     if( FD_UNLIKELY( !blk_gaddr ) ) return NULL;
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;
     FD_COMPILER_MFENCE();
 
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
@@ -906,7 +912,7 @@ uchar *
     if( sz >= FD_SHRED_MAX_PER_SLOT * FD_SHRED_MAX_SZ ) continue;
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;
     FD_COMPILER_MFENCE();
 
     uchar * data_out = fd_valloc_malloc( alloc, 8UL, sz );
@@ -914,7 +920,7 @@ uchar *
     fd_memcpy( data_out, fd_wksp_laddr_fast( wksp, ptr ), sz );
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) {
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) {
       fd_valloc_free( alloc, data_out );
       continue;
     }
@@ -925,6 +931,12 @@ uchar *
 
 int
 fd_blockstore_meta_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out ) {
+  /* WARNING: this code is extremely delicate. Do NOT modify without
+     understanding all the invariants. In particular, we must never
+     dereference through a corrupt pointer. It's OK for the
+     destination data to be overwritten/invalid as long as the memory
+     location is valid. As long as we don't crash, we can validate the
+     data after it is read. */
   fd_wksp_t * wksp = fd_blockstore_wksp( blockstore );
   fd_blockstore_slot_map_t const * slot_map = fd_wksp_laddr_fast( wksp, blockstore->slot_map_gaddr );
   for(;;) {
@@ -938,14 +950,14 @@ fd_blockstore_meta_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_bloc
     if( FD_UNLIKELY( !blk_gaddr ) ) return FD_BLOCKSTORE_ERR_SLOT_MISSING;
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;
     FD_COMPILER_MFENCE();
 
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
     fd_memcpy( blk_out, blk, sizeof(fd_block_t) );
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;
 
     return FD_BLOCKSTORE_OK;
   }
@@ -963,6 +975,12 @@ fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED2551
 
 int
 fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, uchar * txn_data_out ) {
+  /* WARNING: this code is extremely delicate. Do NOT modify without
+     understanding all the invariants. In particular, we must never
+     dereference through a corrupt pointer. It's OK for the
+     destination data to be overwritten/invalid as long as the memory
+     location is valid. As long as we don't crash, we can validate the
+     data after it is read. */
   fd_wksp_t * wksp = fd_blockstore_wksp( blockstore );
   fd_blockstore_slot_map_t const * slot_map = fd_wksp_laddr_fast( wksp, blockstore->slot_map_gaddr );
   fd_blockstore_txn_map_t * txn_map = fd_wksp_laddr_fast( wksp, blockstore->txn_map_gaddr );
@@ -972,12 +990,12 @@ fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_E
 
     fd_blockstore_txn_key_t key;
     fd_memcpy( &key, sig, sizeof( key ) );
-    fd_blockstore_txn_map_t * txn_map_entry = fd_blockstore_txn_map_query( txn_map, &key, NULL );
+    fd_blockstore_txn_map_t const * txn_map_entry = fd_blockstore_txn_map_query_safe( txn_map, &key, NULL );
     if( FD_UNLIKELY( txn_map_entry == NULL ) ) return FD_BLOCKSTORE_ERR_TXN_MISSING;
     fd_memcpy( txn_out, txn_map_entry, sizeof(fd_blockstore_txn_map_t) );
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;
     if( txn_data_out == NULL ) return FD_BLOCKSTORE_OK;
     FD_COMPILER_MFENCE();
 
@@ -987,7 +1005,7 @@ fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_E
     if( FD_UNLIKELY( !blk_gaddr ) ) return FD_BLOCKSTORE_ERR_TXN_MISSING;
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;
     FD_COMPILER_MFENCE();
 
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
@@ -996,14 +1014,14 @@ fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_E
     if( txn_out->offset + txn_out->sz > sz ) continue;
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;
     FD_COMPILER_MFENCE();
 
     uchar const * data = fd_wksp_laddr_fast( wksp, ptr );
     fd_memcpy( txn_data_out, data + txn_out->offset, txn_out->sz );
 
     FD_COMPILER_MFENCE();
-    if( seqnum != blockstore->lock.seqnum ) continue;
+    if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;
 
     return FD_BLOCKSTORE_OK;
   }
