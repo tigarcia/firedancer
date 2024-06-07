@@ -900,9 +900,7 @@ fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_val
     ulong blk_gaddr = query->block_gaddr;
     if( FD_UNLIKELY( !blk_gaddr ) ) return NULL;
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
-    FD_COMPILER_MFENCE();
 
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
     fd_memcpy( blk_out, blk, sizeof(fd_block_t) );
@@ -911,15 +909,12 @@ fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_val
     ulong sz = *data_sz_out = blk->data_sz;
     if( sz >= FD_SHRED_MAX_PER_SLOT * FD_SHRED_MAX_SZ ) continue;
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
-    FD_COMPILER_MFENCE();
 
     uchar * data_out = fd_valloc_malloc( alloc, 8UL, sz );
     if( FD_UNLIKELY( data_out == NULL ) ) return NULL;
     fd_memcpy( data_out, fd_wksp_laddr_fast( wksp, ptr ), sz );
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) {
       fd_valloc_free( alloc, data_out );
       continue;
@@ -949,14 +944,11 @@ fd_blockstore_meta_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_bloc
     ulong blk_gaddr = query->block_gaddr;
     if( FD_UNLIKELY( !blk_gaddr ) ) return FD_BLOCKSTORE_ERR_SLOT_MISSING;
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
-    FD_COMPILER_MFENCE();
 
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
     fd_memcpy( blk_out, blk, sizeof(fd_block_t) );
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
 
     return FD_BLOCKSTORE_OK;
@@ -994,19 +986,15 @@ fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_E
     if( FD_UNLIKELY( txn_map_entry == NULL ) ) return FD_BLOCKSTORE_ERR_TXN_MISSING;
     fd_memcpy( txn_out, txn_map_entry, sizeof(fd_blockstore_txn_map_t) );
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
     if( txn_data_out == NULL ) return FD_BLOCKSTORE_OK;
-    FD_COMPILER_MFENCE();
 
     fd_blockstore_slot_map_t const * query = fd_blockstore_slot_map_query_safe( slot_map, &txn_out->slot, NULL );
     if( FD_UNLIKELY( !query ) ) return FD_BLOCKSTORE_ERR_TXN_MISSING;
     ulong blk_gaddr = query->block_gaddr;
     if( FD_UNLIKELY( !blk_gaddr ) ) return FD_BLOCKSTORE_ERR_TXN_MISSING;
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
-    FD_COMPILER_MFENCE();
 
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
     if( blk_ts ) *blk_ts = blk->ts;
@@ -1014,14 +1002,11 @@ fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_E
     ulong sz = blk->data_sz;
     if( txn_out->offset + txn_out->sz > sz || txn_out->sz > FD_TXN_MTU ) continue;
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
-    FD_COMPILER_MFENCE();
 
     uchar const * data = fd_wksp_laddr_fast( wksp, ptr );
     fd_memcpy( txn_data_out, data + txn_out->offset, txn_out->sz );
 
-    FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
 
     return FD_BLOCKSTORE_OK;
