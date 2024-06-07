@@ -486,7 +486,7 @@ fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED2551
 /* Query the transaction data for the given signature in a thread
  * safe manner */
 int
-fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, uchar txn_data_out[FD_TXN_MTU] );
+fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, long * blk_ts, uchar txn_data_out[FD_TXN_MTU] );
 
 /* Remove slot from blockstore, including all relevant internal structures. */
 int

@@ -1091,7 +1091,7 @@ method_getSignatureStatuses(struct fd_web_replier* replier, struct json_values* 
       continue;
     }
     fd_blockstore_txn_map_t elem;
-    if( fd_blockstore_txn_query_safe( ctx->blockstore, key, &elem, NULL ) ) {
+    if( fd_blockstore_txn_query_safe( ctx->blockstore, key, &elem, NULL, NULL ) ) {
       fd_textstream_sprintf(ts, "null");
       continue;
     }
@@ -1276,40 +1276,27 @@ method_getTransaction(struct fd_web_replier* replier, struct json_values* values
     fd_web_replier_done(replier);
     return 0;
   }
-  fd_blockstore_start_read( ctx->blockstore );
-  fd_blockstore_txn_map_t * elem = fd_blockstore_txn_query( ctx->blockstore, key );
-  if ( FD_UNLIKELY( NULL == elem ) ) {
+  fd_blockstore_txn_map_t elem;
+  long blk_ts;
+  uchar txn_data_raw[FD_TXN_MTU];
+  if( fd_blockstore_txn_query_safe( ctx->blockstore, key, &elem, &blk_ts, txn_data_raw ) ) {
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":null,\"id\":%lu}" CRLF, ctx->call_id);
     fd_web_replier_done(replier);
-    fd_blockstore_end_read( ctx->blockstore );
-    return 0;
-  }
-
-  fd_block_t * blk = fd_blockstore_block_query( ctx->blockstore, elem->slot );
-  if (blk == NULL) {
-    fd_web_replier_error(replier, "failed to load block for slot %lu", elem->slot);
-    fd_blockstore_end_read( ctx->blockstore );
     return 0;
   }
 
   uchar txn_out[FD_TXN_MAX_SZ];
   ulong pay_sz = 0;
-  const uchar* raw = (const uchar *)fd_blockstore_block_data_laddr(ctx->blockstore, blk) + elem->offset;
-  ulong txn_sz = fd_txn_parse_core(raw, elem->sz, txn_out, NULL, &pay_sz, 0);
+  ulong txn_sz = fd_txn_parse_core(txn_data_raw, elem.sz, txn_out, NULL, &pay_sz, 0);
   if ( txn_sz == 0 || txn_sz > FD_TXN_MAX_SZ )
     FD_LOG_ERR(("failed to parse transaction"));
 
-  ulong meta_gaddr = elem->meta_gaddr;
-  ulong meta_sz = elem->meta_sz;
-  void * meta = (meta_gaddr ? fd_wksp_laddr_fast( fd_blockstore_wksp( ctx->blockstore ), meta_gaddr ) : NULL);
-
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"blockTime\":%ld,\"slot\":%lu,",
-                        ctx->blockstore->smr, blk->ts/(long)1e9, elem->slot);
-  fd_txn_to_json( ts, (fd_txn_t *)txn_out, raw, meta, meta_sz, enc, 0, FD_BLOCK_DETAIL_FULL, 0 );
+                        ctx->blockstore->smr, blk_ts/(long)1e9, elem.slot);
+  fd_txn_to_json( ts, (fd_txn_t *)txn_out, txn_data_raw, NULL, 0, enc, 0, FD_BLOCK_DETAIL_FULL, 0 );
   fd_textstream_sprintf(ts, "},\"id\":%lu}" CRLF, ctx->call_id);
 
   fd_web_replier_done(replier);
-  fd_blockstore_end_read( ctx->blockstore );
   return 0;
 }
 

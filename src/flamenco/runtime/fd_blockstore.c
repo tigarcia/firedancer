@@ -974,7 +974,7 @@ fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED2551
 }
 
 int
-fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, uchar txn_data_out[FD_TXN_MTU] ) {
+fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, long * blk_ts, uchar txn_data_out[FD_TXN_MTU] ) {
   /* WARNING: this code is extremely delicate. Do NOT modify without
      understanding all the invariants. In particular, we must never
      dereference through a corrupt pointer. It's OK for the
@@ -1009,6 +1009,7 @@ fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_E
     FD_COMPILER_MFENCE();
 
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
+    if( blk_ts ) *blk_ts = blk->ts;
     ulong ptr = blk->data_gaddr;
     ulong sz = blk->data_sz;
     if( txn_out->offset + txn_out->sz > sz || txn_out->sz > FD_TXN_MTU ) continue;
