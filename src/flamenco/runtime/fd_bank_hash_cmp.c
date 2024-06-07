@@ -215,7 +215,7 @@ fd_bank_hash_cmp_check( fd_bank_hash_cmp_t * bank_hash_cmp, ulong slot ) {
                             cmp->stakes[i] ) );
         }
       }
-      FD_LOG_ERR( ( "bank hash mismatch on %lu, shutting down!", cmp->slot ) );
+      return 2;
     } else {
       FD_LOG_NOTICE( ( "\n\n[Bank Hash Comparison]\n"
                        "slot:   %lu\n"

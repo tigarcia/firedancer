@@ -116,6 +116,7 @@ struct fd_replay_tile_ctx {
   fd_latest_vote_t * latest_votes;
   fd_capture_ctx_t * capture_ctx;
   FILE *             capture_file;
+  FILE *             slots_file;
 
   fd_bft_t *        bft;
   fd_ghost_t *      ghost;
@@ -468,11 +469,18 @@ after_frag( void *                 _ctx,
 
       /* Prepare bank for next execution. */
 
+      ulong last_slot = child->slot_ctx.slot_bank.slot;
+
       child->slot_ctx.slot_bank.slot           = ctx->curr_slot;
       child->slot_ctx.slot_bank.collected_fees = 0;
       child->slot_ctx.slot_bank.collected_rent = 0;
 
       fd_hash_t const * bank_hash = &child->slot_ctx.slot_bank.banks_hash;
+
+      if ( FD_UNLIKELY( ctx->slots_file ) ) {
+        FD_LOG_NOTICE(("writing %lu to slots file", last_slot));
+        fprintf( ctx->slots_file, "%lu\n", last_slot );
+      }
 
       if( NULL != ctx->capture_ctx ) fd_solcap_writer_flush( ctx->capture_ctx->capture );
 
@@ -482,8 +490,18 @@ after_frag( void *                 _ctx,
 
       /* Try to move the bank hash comparison window forward */
       ulong parent_slot = bank_hash_cmp->slot + 1;
-      for( ulong i = parent_slot; i <= ctx->curr_slot; i++ ) {
-        if( FD_LIKELY( fd_bank_hash_cmp_check( bank_hash_cmp, i ) ) ) { bank_hash_cmp->slot = i; }
+      for( ulong cmp_slot = parent_slot; cmp_slot <= ctx->curr_slot; cmp_slot++ ) {
+        int rc = fd_bank_hash_cmp_check( bank_hash_cmp, cmp_slot );
+        if( FD_LIKELY( rc ) ) { 
+          if ( FD_UNLIKELY( rc == 2 ) ) {
+            // Close the file
+            fclose( ctx->slots_file );
+            char new_filename[100];
+            snprintf( new_filename, sizeof( new_filename ), "%lu-%lu-%lu.txt", ctx->replay->snapshot_slot, last_slot, cmp_slot );
+            FD_LOG_ERR( ( "bank hash mismatch on %lu, shutting down!", cmp_slot ) );
+          }
+          bank_hash_cmp->slot = cmp_slot;
+        }
       }
 
       fd_bank_hash_cmp_unlock( bank_hash_cmp );
@@ -644,6 +662,13 @@ init_after_snapshot( fd_replay_tile_ctx_t * ctx ) {
     bank_hash_cmp->slot = snapshot_slot;
     ctx->curr_slot      = snapshot_slot;
     ctx->parent_slot    = ctx->slot_ctx->slot_bank.prev_slot;
+  }
+
+  if( FD_UNLIKELY( ctx->capture_ctx ) ) {
+    char filename[100];
+    snprintf( filename, sizeof( filename ), "%lu.txt", snapshot_slot );
+    ctx->slots_file = fopen( filename, "w" );
+    FD_TEST( ctx->slots_file );
   }
 
   // fd_features_restore( ctx->slot_ctx );
