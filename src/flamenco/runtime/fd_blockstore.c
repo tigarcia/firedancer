@@ -881,7 +881,7 @@ fd_blockstore_next_slot_query( fd_blockstore_t * blockstore, ulong slot , ulong 
 }
 
 uchar *
-  fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out ) {
+fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out ) {
   /* WARNING: this code is extremely delicate. Do NOT modify without
      understanding all the invariants. In particular, we must never
      dereference through a corrupt pointer. It's OK for the
@@ -974,7 +974,7 @@ fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED2551
 }
 
 int
-fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, uchar * txn_data_out ) {
+fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, uchar txn_data_out[FD_TXN_MTU] ) {
   /* WARNING: this code is extremely delicate. Do NOT modify without
      understanding all the invariants. In particular, we must never
      dereference through a corrupt pointer. It's OK for the
@@ -1011,7 +1011,7 @@ fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_E
     fd_block_t * blk = fd_wksp_laddr_fast( wksp, blk_gaddr );
     ulong ptr = blk->data_gaddr;
     ulong sz = blk->data_sz;
-    if( txn_out->offset + txn_out->sz > sz ) continue;
+    if( txn_out->offset + txn_out->sz > sz || txn_out->sz > FD_TXN_MTU ) continue;
 
     FD_COMPILER_MFENCE();
     if( FD_UNLIKELY( seqnum != blockstore->lock.seqnum ) ) continue;

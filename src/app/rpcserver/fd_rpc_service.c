@@ -1069,7 +1069,6 @@ method_getSignatureStatuses(struct fd_web_replier* replier, struct json_values* 
                         ctx->blockstore->smr);
 
   // Iterate through account ids
-  fd_blockstore_start_read( ctx->blockstore );
   for ( ulong i = 0; ; ++i ) {
     // Path to argument
     uint path[4];
@@ -1091,17 +1090,16 @@ method_getSignatureStatuses(struct fd_web_replier* replier, struct json_values* 
       fd_textstream_sprintf(ts, "null");
       continue;
     }
-    fd_blockstore_txn_map_t * elem = fd_blockstore_txn_query( ctx->blockstore, key );
-    if ( FD_UNLIKELY( NULL == elem ) ) {
+    fd_blockstore_txn_map_t elem;
+    if( fd_blockstore_txn_query_safe( ctx->blockstore, key, &elem, NULL ) ) {
       fd_textstream_sprintf(ts, "null");
       continue;
     }
 
     // TODO other fields
     fd_textstream_sprintf(ts, "{\"slot\":%lu,\"confirmations\":null,\"err\":null,\"confirmationStatus\":\"finalized\"}",
-                          elem->slot);
+                          elem.slot);
   }
-  fd_blockstore_end_read( ctx->blockstore );
 
   fd_textstream_sprintf(ts, "]},\"id\":%lu}" CRLF, ctx->call_id);
   fd_web_replier_done(replier);
