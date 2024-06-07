@@ -52,4 +52,6 @@ testnet.toml
 mainnet.toml
 testnet.sh
 mainnet.sh
+debug-mainnet.sh
+debug-testnet.sh
 venv
