@@ -201,6 +201,7 @@ fd_exec_txn_ctx_setup( fd_exec_txn_ctx_t * txn_ctx,
   txn_ctx->paid_fees          = 0;
   txn_ctx->heap_size          = FD_VM_DEFAULT_HEAP_SZ;
   txn_ctx->loaded_accounts_data_size_limit = MAX_LOADED_ACCOUNTS_DATA_SIZE_BYTES;
+  txn_ctx->accounts_resize_delta = 0;
 
   txn_ctx->txn_descriptor = txn_descriptor;
   txn_ctx->_txn_raw->raw = txn_raw->raw;
@@ -215,6 +216,13 @@ fd_exec_txn_ctx_setup( fd_exec_txn_ctx_t * txn_ctx,
   txn_ctx->failed_instr    = NULL;
   txn_ctx->instr_err_idx   = INT_MAX;
   txn_ctx->capture_ctx     = NULL;
+
+  txn_ctx->instr_info_pool = fd_instr_info_pool_join( fd_instr_info_pool_new( 
+    fd_valloc_malloc( txn_ctx->valloc, fd_instr_info_pool_align( ), fd_instr_info_pool_footprint( FD_MAX_INSTRUCTION_TRACE_LENGTH ) ),
+    FD_MAX_INSTRUCTION_TRACE_LENGTH
+  ) );
+
+  txn_ctx->instr_trace_length      = 0;
 }
 
 void

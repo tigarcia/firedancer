@@ -65,8 +65,10 @@
 #define FD_EXECUTOR_INSTR_ERR_ARITHMETIC_OVERFLOW                ( -48 ) /* Program arithmetic overflowed */
 #define FD_EXECUTOR_INSTR_ERR_UNSUPPORTED_SYSVAR                 ( -49 ) /* Unsupported sysvar */
 #define FD_EXECUTOR_INSTR_ERR_ILLEGAL_OWNER                      ( -50 ) /* Provided owner is not allowed */
-#define FD_EXECUTOR_INSTR_ERR_MAX_ACCS_DATA_SIZE_EXCEEDED        ( -51 ) /* Account data allocation exceeded the maximum accounts data size limit */
-#define FD_EXECUTOR_INSTR_ERR_ACTIVE_VOTE_ACC_CLOSE              ( -52 ) /* Active vote account close */
+#define FD_EXECUTOR_INSTR_ERR_MAX_ACCS_DATA_ALLOCS_EXCEEDED      ( -51 ) /* Account data allocation exceeded the maximum accounts data size limit */
+#define FD_EXECUTOR_INSTR_ERR_MAX_ACCS_EXCEEDED                  ( -52 ) /* Max accounts exceeded */
+#define FD_EXECUTOR_INSTR_ERR_MAX_INSN_TRACE_LENS_EXCEEDED       ( -53 ) /* Max instruction trace length exceeded */
+#define FD_EXECUTOR_INSTR_ERR_BUILTINS_MUST_CONSUME_CUS          ( -54 ) /* Builtin programs must consume compute units */
 
 #define FD_EXECUTOR_SYSTEM_ERR_ACCOUNT_ALREADY_IN_USE            ( -1 ) /* an account with the same address already exists */
 #define FD_EXECUTOR_SYSTEM_ERR_RESULTS_WITH_NEGATIVE_LAMPORTS    ( -2 ) /* account does not have enough SOL to perform the operation */
@@ -116,7 +118,11 @@ fd_executor_lookup_native_program(  fd_pubkey_t const * program_id );
 
 /* fd_execute_instr creates a new fd_exec_instr_ctx_t and performs
    instruction processing.  Does fd_scratch allocations.  Returns an
-   error code in FD_EXECUTOR_INSTR_{ERR_{...},SUCCESS}. */
+   error code in FD_EXECUTOR_INSTR_{ERR_{...},SUCCESS}.
+   
+   IMPORTANT: instr_info must have the same lifetime as txn_ctx. This can
+   be achieved by using fd_executor_acquire_instr_info_elem( txn_ctx ) to
+   acquire an fd_instr_info_t element with the same lifetime as the txn_ctx */
 
 int
 fd_execute_instr( fd_exec_txn_ctx_t * txn_ctx,
@@ -151,6 +157,15 @@ fd_execute_txn_finalize( fd_exec_slot_ctx_t * slot_ctx,
   Makes changes to the Funk accounts DB. */
 int
 fd_execute_txn( fd_exec_txn_ctx_t * txn_ctx );
+
+/* Returns a new fd_instr_info_t element, which will have the same lifetime as the given txn_ctx.
+
+   Returns NULL if we failed to acquire a new fd_instr_info_t element from the pool, which has 
+   FD_MAX_INSTRUCTION_TRACE_LENGTH capacity. The appropiate response to this is usually 
+   failing with FD_EXECUTOR_INSTR_ERR_MAX_INSN_TRACE_LENS_EXCEEDED.
+ */
+fd_instr_info_t *
+fd_executor_acquire_instr_info_elem( fd_exec_txn_ctx_t * txn_ctx );
 
 uint
 fd_executor_txn_uses_sysvar_instructions( fd_exec_txn_ctx_t const * txn_ctx );

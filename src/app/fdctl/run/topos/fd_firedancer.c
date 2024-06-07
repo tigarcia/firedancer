@@ -1,7 +1,8 @@
 /* Firedancer topology used for testing the full validator.
    Associated test script: test_firedancer.sh */
 #include "topos.h"
-#include "../tiles/tiles.h"
+#include "../../../../disco/tiles.h"
+#include "../../fdctl.h"
 #include "../../config.h"
 #include "../../../../ballet/shred/fd_shred.h"
 #include "../../../../disco/topo/fd_topob.h"
@@ -127,11 +128,13 @@ fd_topo_firedancer( config_t * _config ) {
 
   fd_topo_tile_t * store_tile  = &topo->tiles[ fd_topo_find_tile( topo, "store",  0UL ) ];
   fd_topo_tile_t * replay_tile = &topo->tiles[ fd_topo_find_tile( topo, "replay", 0UL ) ];
+  fd_topo_tile_t * repair_tile = &topo->tiles[ fd_topo_find_tile( topo, "repair", 0UL ) ];
 
   /* Create a shared blockstore to be used by store and replay. */
   fd_topo_obj_t * blockstore_obj = fd_topob_obj_concrete( topo, "blockstore", "bstore", fd_blockstore_align(), fd_blockstore_footprint(), 32UL * FD_SHMEM_GIGANTIC_PAGE_SZ );
   fd_topob_tile_uses( topo, store_tile,  blockstore_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   fd_topob_tile_uses( topo, replay_tile, blockstore_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
+  fd_topob_tile_uses( topo, repair_tile, blockstore_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
 
   FD_TEST( fd_pod_insertf_ulong( topo->props, blockstore_obj->id, "blockstore" ) );
 
@@ -242,6 +245,7 @@ fd_topo_firedancer( config_t * _config ) {
       tile->net.legacy_transaction_listen_port = config->tiles.quic.regular_transaction_listen_port;
       tile->net.gossip_listen_port             = config->gossip.port;
       tile->net.repair_intake_listen_port      = config->tiles.repair.repair_intake_listen_port;
+      tile->net.repair_serve_listen_port       = config->tiles.repair.repair_serve_listen_port;
 
     } else if( FD_UNLIKELY( !strcmp( tile->name, "netmux" ) ) ) {
 

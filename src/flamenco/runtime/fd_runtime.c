@@ -1,7 +1,6 @@
 #include "fd_acc_mgr.h"
 #include "fd_runtime.h"
 #include "fd_account.h"
-#include "fd_borrowed_account.h"
 #include "fd_hashes.h"
 #include "sysvar/fd_sysvar_cache.h"
 #include "sysvar/fd_sysvar_clock.h"
@@ -679,8 +678,7 @@ fd_runtime_execute_txn_task(void *tpool,
 
   int res = fd_execute_txn_prepare_phase4( task_info->txn_ctx->slot_ctx, task_info->txn_ctx );
   if( res != 0 ) {
-    FD_LOG_WARNING(("could not prepare txn"));
-    return;
+    FD_LOG_ERR(("could not prepare txn"));
   }
   fd_txn_t const *txn = task_info->txn_ctx->txn_descriptor;
   fd_rawtxn_b_t const *raw_txn = task_info->txn_ctx->_txn_raw;
@@ -733,7 +731,6 @@ fd_runtime_prepare_txns_phase1( fd_exec_slot_ctx_t * slot_ctx,
   for (ulong txn_idx = 0; txn_idx < txn_cnt; txn_idx++) {
     fd_txn_p_t * txn = &txns[txn_idx];
 
-    // FD_LOG_DEBUG(("preparing txn - slot: %lu, txn_idx: %lu, sig: %64J", slot_ctx->slot_bank.slot, txn_idx, (uchar *)raw_txn->raw + txn->signature_off));
 
     task_info[txn_idx].txn_ctx = fd_valloc_malloc( slot_ctx->valloc, FD_EXEC_TXN_CTX_ALIGN, FD_EXEC_TXN_CTX_FOOTPRINT );
     fd_exec_txn_ctx_t * txn_ctx = task_info[txn_idx].txn_ctx;
@@ -741,6 +738,9 @@ fd_runtime_prepare_txns_phase1( fd_exec_slot_ctx_t * slot_ctx,
     task_info[txn_idx].txn = txn;
     fd_txn_t const * txn_descriptor = (fd_txn_t const *) txn->_;
     fd_rawtxn_b_t raw_txn = {.raw = txn->payload, .txn_sz = (ushort)txn->payload_sz };
+    
+    // FD_LOG_INFO(("preparing txn - slot: %lu, txn_idx: %lu, fee_payer: %32J, sig: %64J", slot_ctx->slot_bank.slot, txn_idx, (uchar*)raw_txn.raw + txn_descriptor->acct_addr_off, (uchar *)raw_txn.raw + txn_descriptor->signature_off));
+
     int res = fd_execute_txn_prepare_phase1(slot_ctx, txn_ctx, txn_descriptor, &raw_txn);
     if( res != 0 ) {
       txn->flags = 0;
@@ -818,24 +818,15 @@ fd_collect_fee_task( void *tpool,
   }
 
   fd_exec_txn_ctx_t * txn_ctx = task_info->txn_ctx;
-  if( FD_UNLIKELY( !txn_ctx ) ) {
-    __asm__("int $3");
-    FD_LOG_ERR(("[replay] txn missing when trying to collect fee."));
-  };
   fd_exec_slot_ctx_t * slot_ctx = task_info->txn_ctx->slot_ctx;
 
   fd_pubkey_t * tx_accs = (fd_pubkey_t *)((uchar *)txn_ctx->_txn_raw->raw + txn_ctx->txn_descriptor->acct_addr_off);
-
-  if (FD_UNLIKELY(!txn_ctx->_txn_raw->raw)) {
-    __asm__("int $3");
-    FD_LOG_ERR( ( "[replay] txn missing when trying to collect fee." ) );
-  }
 
   fd_pubkey_t const * fee_payer_acc = &tx_accs[0];
   int err = fd_acc_mgr_view( slot_ctx->acc_mgr, slot_ctx->funk_txn, fee_payer_acc, &task_info->fee_payer_rec );
 
   if( FD_UNLIKELY( err ) ) {
-    FD_LOG_ERR(( "[replay] we were unable to retrieve the fee payer %32J. shutting down. error: (%d-%s)", fee_payer_acc->uc, err, fd_acc_mgr_strerror( err ) ));
+    FD_LOG_WARNING(( "fd_acc_mgr_view(%32J) failed (%d-%s)", fee_payer_acc->uc, err, fd_acc_mgr_strerror( err ) ));
     // TODO: The fee payer does not seem to exist?!  what now?
     task_info->result = -1;
     return;
@@ -860,12 +851,10 @@ fd_runtime_prepare_txns_phase2_tpool( fd_exec_slot_ctx_t * slot_ctx,
                                       ulong max_workers ) {
   int res = 0;
   FD_SCRATCH_SCOPE_BEGIN  {
-    fd_borrowed_account_t * fee_payer_recs = fd_scratch_alloc( FD_BORROWED_ACCOUNT_ALIGN, txn_cnt * FD_BORROWED_ACCOUNT_FOOTPRINT );
-    fd_borrowed_account_t ** fee_payer_accs = fd_scratch_alloc( alignof( fd_borrowed_account_t * ), txn_cnt * sizeof( fd_borrowed_account_t * ) );
-    for (ulong i = 0; i < txn_cnt; i++) {
-      fee_payer_accs[i] = &fee_payer_recs[i];
-    }
-    fd_collect_fee_task_info_t * collect_fee_task_infos = fd_scratch_alloc( alignof(fd_collect_fee_task_info_t), txn_cnt * sizeof(fd_collect_fee_task_info_t) );
+    ulong fee_payer_accs_cnt = 0;
+    ulong * fee_payer_idxs = fd_scratch_alloc( sizeof(ulong), txn_cnt * sizeof(ulong) );
+    fd_borrowed_account_t * * fee_payer_accs = fd_scratch_alloc( FD_BORROWED_ACCOUNT_ALIGN, txn_cnt * FD_BORROWED_ACCOUNT_FOOTPRINT );
+    fd_collect_fee_task_info_t * collect_fee_task_infos = fd_scratch_alloc( 8UL, txn_cnt * sizeof(fd_collect_fee_task_info_t) );
 
     /* Loop across transactions */
     for (ulong txn_idx = 0; txn_idx < txn_cnt; txn_idx++) {
@@ -894,17 +883,19 @@ fd_runtime_prepare_txns_phase2_tpool( fd_exec_slot_ctx_t * slot_ctx,
         continue;
       }
 
-      fee_payer_accs[txn_idx] = fd_borrowed_account_init( &collect_fee_task_infos[txn_idx].fee_payer_rec );
-      collect_fee_task_infos[txn_idx].txn_ctx = txn_ctx;
-      collect_fee_task_infos[txn_idx].result = (task_info[txn_idx].txn->flags==0) ? -1 : 0;
+      fee_payer_idxs[fee_payer_accs_cnt] = txn_idx;
+      fee_payer_accs[fee_payer_accs_cnt] = fd_borrowed_account_init( &collect_fee_task_infos[fee_payer_accs_cnt].fee_payer_rec );
+      collect_fee_task_infos[fee_payer_accs_cnt].txn_ctx = txn_ctx;
+      collect_fee_task_infos[fee_payer_accs_cnt].result = (task_info[txn_idx].txn->flags==0) ? -1 : 0;
+      fee_payer_accs_cnt++;
     }
 
-    fd_tpool_exec_all_rrobin( tpool, 0, max_workers, fd_collect_fee_task, collect_fee_task_infos, NULL, NULL, 1, 0, txn_cnt );
+    fd_tpool_exec_all_rrobin( tpool, 0, max_workers, fd_collect_fee_task, collect_fee_task_infos, NULL, NULL, 1, 0, fee_payer_accs_cnt );
 
-    for (ulong txn_idx = 0; txn_idx < txn_cnt; txn_idx++) {
-      fd_collect_fee_task_info_t * collect_fee_task_info = &collect_fee_task_infos[txn_idx];
+    for (ulong fee_payer_idx = 0; fee_payer_idx < fee_payer_accs_cnt; fee_payer_idx++) {
+      fd_collect_fee_task_info_t * collect_fee_task_info = &collect_fee_task_infos[fee_payer_idx];
       if( FD_UNLIKELY( collect_fee_task_info->result!=0 ) ) {
-        task_info[ txn_idx ].txn->flags = 0;
+        task_info[ fee_payer_idxs[ fee_payer_idx ] ].txn->flags = 0;
         FD_LOG_WARNING(( "failed to collect fees" ));
         res |= -1;
         continue;
@@ -912,7 +903,7 @@ fd_runtime_prepare_txns_phase2_tpool( fd_exec_slot_ctx_t * slot_ctx,
       slot_ctx->slot_bank.collected_fees += collect_fee_task_info->fee;
     }
 
-    int err = fd_acc_mgr_save_many_tpool( slot_ctx->acc_mgr, slot_ctx->funk_txn, fee_payer_accs, txn_cnt, tpool, max_workers );
+    int err = fd_acc_mgr_save_many_tpool( slot_ctx->acc_mgr, slot_ctx->funk_txn, fee_payer_accs, fee_payer_accs_cnt, tpool, max_workers );
     if( FD_UNLIKELY( err ) ) {
       FD_LOG_WARNING(( "fd_acc_mgr_save_many failed (%d-%s)", err, fd_acc_mgr_strerror( err ) ));
       return -1;
@@ -1320,6 +1311,7 @@ fd_runtime_finalize_txns_tpool( fd_exec_slot_ctx_t * slot_ctx,
 
     for (ulong txn_idx = 0; txn_idx < txn_cnt; txn_idx++) {
       fd_exec_txn_ctx_t * txn_ctx = task_info[txn_idx].txn_ctx;
+      fd_valloc_free( txn_ctx->valloc, fd_instr_info_pool_delete( fd_instr_info_pool_leave( txn_ctx->instr_info_pool ) ) );
       fd_valloc_free( slot_ctx->valloc, txn_ctx );
     }
 
@@ -3624,13 +3616,11 @@ void fd_process_new_epoch(
 
 void
 fd_runtime_recover_banks( fd_exec_slot_ctx_t * slot_ctx, int delete_first ) {
-  long tic = fd_log_wallclock();
   fd_funk_t *           funk        = slot_ctx->acc_mgr->funk;
   fd_funk_txn_t *       txn         = slot_ctx->funk_txn;
   fd_exec_epoch_ctx_t * epoch_ctx   = slot_ctx->epoch_ctx;
   fd_epoch_bank_t *     epoch_bank  = fd_exec_epoch_ctx_epoch_bank( epoch_ctx );
   fd_valloc_t           epoch_valloc = fd_scratch_virtual();
-  long decode_tic = fd_log_wallclock();
   {
     fd_funk_rec_key_t id = fd_runtime_epoch_bank_key();
     fd_funk_rec_t const * rec = fd_funk_rec_query_global(funk, txn, &id);
@@ -3647,8 +3637,6 @@ fd_runtime_recover_banks( fd_exec_slot_ctx_t * slot_ctx, int delete_first ) {
 
     FD_LOG_NOTICE(( "recovered epoch_bank" ));
   }
-  long decode_toc = fd_log_wallclock();
-  FD_LOG_NOTICE( ( "decoded banks in %ld ms", ( decode_toc - decode_tic ) / (long)1e6 ) );
 
   {
     if ( delete_first ) {
@@ -3676,7 +3664,7 @@ fd_runtime_recover_banks( fd_exec_slot_ctx_t * slot_ctx, int delete_first ) {
     slot_ctx->slot_bank.collected_fees = 0;
     slot_ctx->slot_bank.collected_rent = 0;
   }
-  FD_LOG_NOTICE(("recovered banks in %ld ms", (fd_log_wallclock()-tic) / (long)1e6));
+
 }
 
 void
@@ -3770,13 +3758,12 @@ int fd_runtime_sysvar_cache_load( fd_exec_slot_ctx_t * slot_ctx ) {
 }
 
 void
-fd_runtime_read_genesis( fd_exec_slot_ctx_t * slot_ctx,
-                        char const * genesis_filepath,
-                        uchar is_snapshot ) {
+fd_runtime_read_genesis( fd_exec_slot_ctx_t* slot_ctx,
+                        char const         * genesis_filepath,
+                        uchar                is_snapshot,
+                        fd_capture_ctx_t   * capture_ctx
+ ) {
   if ( strlen( genesis_filepath ) == 0 ) return;
-
-  // TODO: Have a solcap capture?
-  fd_capture_ctx_t *    capture_ctx  = NULL;
 
   struct stat sbuf;
   if( FD_UNLIKELY( stat( genesis_filepath, &sbuf) < 0 ) ) {

@@ -103,7 +103,29 @@ read_bpf_upgradeable_loader_state_for_program( fd_exec_txn_ctx_t *              
     return NULL;
   }
 
-  return rec->const_meta;  /* UGLY!!!!! */
+  return rec->const_meta;
+}
+
+/* https://github.com/anza-xyz/agave/blob/9b22f28104ec5fd606e4bb39442a7600b38bb671/programs/bpf_loader/src/lib.rs#L216-L229 */
+ulong
+calculate_heap_cost( ulong heap_size, ulong heap_cost, int round_up_heap_size, int * err ) {
+  #define KIBIBYTE_MUL_PAGES       (1024UL * 32UL)
+  #define KIBIBYTE_MUL_PAGES_SUB_1 (KIBIBYTE_MUL_PAGES - 1UL)
+
+  if( round_up_heap_size ) {
+    heap_size = fd_ulong_sat_add( heap_size, KIBIBYTE_MUL_PAGES_SUB_1 );
+  }
+
+  if( FD_UNLIKELY( heap_size==0UL ) ) {
+    *err = FD_EXECUTOR_INSTR_ERR_GENERIC_ERR;
+    return 0UL;
+  }
+
+  heap_size = fd_ulong_sat_mul( fd_ulong_sat_sub( heap_size / KIBIBYTE_MUL_PAGES, 1UL ), heap_cost );
+  return heap_size;
+
+  #undef KIBIBYTE_MUL_PAGES
+  #undef KIBIBYTE_MUL_PAGES_SUB_1
 }
 
 /* https://github.com/anza-xyz/agave/blob/574bae8fefc0ed256b55340b9d87b7689bcdf222/programs/bpf_loader/src/lib.rs#L105-L171 */
@@ -111,6 +133,7 @@ int
 deploy_program( fd_exec_instr_ctx_t * instr_ctx,
                 uchar * const         programdata,
                 ulong                 programdata_size ) {   
+  bool deploy_mode = true;
   fd_sbpf_syscalls_t * syscalls = fd_sbpf_syscalls_new( fd_scratch_alloc( fd_sbpf_syscalls_align(),
                                                                           fd_sbpf_syscalls_footprint() ) );
   if( FD_UNLIKELY( !syscalls ) ) {
@@ -121,14 +144,14 @@ deploy_program( fd_exec_instr_ctx_t * instr_ctx,
 
   /* Load executable */
   fd_sbpf_elf_info_t  _elf_info[ 1UL ];
-  fd_sbpf_elf_info_t * elf_info = fd_sbpf_elf_peek( _elf_info, programdata, programdata_size );
+  fd_sbpf_elf_info_t * elf_info = fd_sbpf_elf_peek( _elf_info, programdata, programdata_size, deploy_mode );
   if( FD_UNLIKELY( !elf_info ) ) {
     FD_LOG_WARNING(( "Elf info failing" ));
     return FD_EXECUTOR_INSTR_ERR_INVALID_ACC_DATA;
   }
 
   /* Allocate rodata segment */
-  void * rodata = fd_scratch_alloc( 32UL, elf_info->rodata_footprint );
+  void * rodata = fd_scratch_alloc( FD_SBPF_PROG_RODATA_ALIGN, elf_info->rodata_footprint );
   if( FD_UNLIKELY( !rodata ) ) {
     return FD_EXECUTOR_INSTR_ERR_INVALID_ACC_DATA;
   }
@@ -142,7 +165,7 @@ deploy_program( fd_exec_instr_ctx_t * instr_ctx,
   } 
 
   /* Load program */
-  if( FD_UNLIKELY( fd_sbpf_program_load( prog, programdata, programdata_size, syscalls ) ) ) {
+  if( FD_UNLIKELY( fd_sbpf_program_load( prog, programdata, programdata_size, syscalls, deploy_mode ) ) ) {
     FD_LOG_ERR(( "fd_sbpf_program_load() failed: %s", fd_sbpf_strerror() ));
   }
 
@@ -339,6 +362,20 @@ execute( fd_exec_instr_ctx_t * instr_ctx, fd_sbpf_validated_program_t * prog ) {
     .alloc               = { .offset = 0UL }
   };
 
+  /* https://github.com/anza-xyz/agave/blob/9b22f28104ec5fd606e4bb39442a7600b38bb671/programs/bpf_loader/src/lib.rs#L288-L298 */
+  ulong heap_size = instr_ctx->txn_ctx->heap_size;
+  ulong heap_cost = vm_compute_budget.heap_cost;
+  int round_up_heap_size = FD_FEATURE_ACTIVE( instr_ctx->slot_ctx, round_up_heap_size );
+  int heap_err = 0;
+  ulong heap_cost_result = calculate_heap_cost( heap_size, heap_cost, round_up_heap_size, &heap_err );
+  if( FD_UNLIKELY( heap_err ) ) {
+    return FD_EXECUTOR_INSTR_ERR_GENERIC_ERR;
+  }
+  if( FD_UNLIKELY( heap_cost_result>vm_ctx.compute_meter ) ) {
+    return FD_EXECUTOR_INSTR_ERR_COMPUTE_BUDGET_EXCEEDED;
+  }
+  vm_ctx.compute_meter -= heap_cost_result;
+
   memset( vm_ctx.register_file, 0, sizeof(vm_ctx.register_file) );
   vm_ctx.register_file[1] = FD_VM_MEM_MAP_INPUT_REGION_START;
   vm_ctx.register_file[10] = FD_VM_MEM_MAP_STACK_REGION_START + 0x1000;
@@ -374,8 +411,6 @@ execute( fd_exec_instr_ctx_t * instr_ctx, fd_sbpf_validated_program_t * prog ) {
 /* https://github.com/anza-xyz/agave/blob/77daab497df191ef485a7ad36ed291c1874596e5/programs/bpf_loader/src/lib.rs#L566-L1444 */
 int
 process_loader_upgradeable_instruction( fd_exec_instr_ctx_t * instr_ctx ) {
-  // FD_LOG_WARNING(("Processing loader upgradeable instruction"));
-
   uchar const * data = instr_ctx->instr->data;
 
   fd_bpf_upgradeable_loader_program_instruction_t instruction = {0};
@@ -1330,7 +1365,7 @@ process_loader_upgradeable_instruction( fd_exec_instr_ctx_t * instr_ctx ) {
     }
 
     err = 0;
-    if( FD_UNLIKELY( !fd_account_set_data_length2( instr_ctx, programdata_account->meta, programdata_account->pubkey, new_len, 0, &err ) ) ) {
+    if( FD_UNLIKELY( !fd_account_set_data_length( instr_ctx, 0UL, new_len, &err ) ) ) {
       return err;
     }
 

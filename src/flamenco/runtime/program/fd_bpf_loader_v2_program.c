@@ -59,13 +59,13 @@ fd_bpf_loader_v2_user_execute( fd_exec_instr_ctx_t ctx ) {
 
   long dt = -fd_log_wallclock();
   fd_sbpf_elf_info_t elf_info;
-  if (fd_sbpf_elf_peek( &elf_info, program_data, program_data_len ) == NULL) {
+  if (fd_sbpf_elf_peek( &elf_info, program_data, program_data_len, false ) == NULL) {
     return FD_EXECUTOR_INSTR_ERR_INVALID_ACC_DATA;
   }
 
   /* Allocate rodata segment */
 
-  void * rodata = fd_valloc_malloc( ctx.valloc, 32UL,  elf_info.rodata_footprint );
+  void * rodata = fd_valloc_malloc( ctx.valloc, FD_SBPF_PROG_RODATA_ALIGN,  elf_info.rodata_footprint );
   FD_TEST( rodata );
 
   /* Allocate program buffer */
@@ -83,7 +83,7 @@ fd_bpf_loader_v2_user_execute( fd_exec_instr_ctx_t ctx ) {
   fd_vm_syscall_register_all( syscalls );
   /* Load program */
 
-  if(  0!=fd_sbpf_program_load( prog, program_data, program_data_len, syscalls ) ) {
+  if(  0!=fd_sbpf_program_load( prog, program_data, program_data_len, syscalls, false ) ) {
     FD_LOG_ERR(( "fd_sbpf_program_load() failed: %s", fd_sbpf_strerror() ));
   }
   dt += fd_log_wallclock();
@@ -277,9 +277,11 @@ if (memcmp(signature, sig, 64) == 0) {
   }
 
   if (FD_UNLIKELY(memcmp(metadata->info.owner, fd_solana_bpf_loader_deprecated_program_id.key, sizeof(fd_pubkey_t)) == 0)) {
-    fd_bpf_loader_input_deserialize_unaligned(ctx, pre_lens, input, input_sz);
+    if(fd_bpf_loader_input_deserialize_unaligned(ctx, pre_lens, input, input_sz))
+      return -1;
   } else {
-    fd_bpf_loader_input_deserialize_aligned(ctx, pre_lens, input, input_sz);
+    if(fd_bpf_loader_input_deserialize_aligned(ctx, pre_lens, input, input_sz))
+      return -1;
   }
 
   return 0;

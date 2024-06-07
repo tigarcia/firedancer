@@ -376,18 +376,18 @@ fd_set_exempt_rent_epoch_max( fd_exec_txn_ctx_t * txn_ctx,
 // 1. static and dynamic account keys that are loaded for the message
 // 2. owner program which inteprets the opaque data for each instruction
 static int
-fd_cap_transaction_accounts_data_size( fd_exec_txn_ctx_t * txn_ctx,
-                                       fd_instr_info_t const *  instrs,
-                                       ushort              instrs_cnt ) {
+fd_cap_transaction_accounts_data_size( fd_exec_txn_ctx_t *       txn_ctx,
+                                       fd_instr_info_t  const ** instrs,
+                                       ushort                    instrs_cnt ) {
   ulong total_accounts_data_size = 0UL;
   for( ulong idx = 0; idx < txn_ctx->accounts_cnt; idx++ ) {
     fd_borrowed_account_t *b = &txn_ctx->borrowed_accounts[idx];
     ulong program_data_len = (NULL != b->meta) ? b->meta->dlen : (NULL != b->const_meta) ? b->const_meta->dlen : 0UL;
-    total_accounts_data_size = fd_ulong_sat_add(total_accounts_data_size, program_data_len);
+    total_accounts_data_size = fd_ulong_sat_add( total_accounts_data_size, program_data_len );
   }
 
   for( ushort i = 0; i < instrs_cnt; ++i ) {
-    fd_instr_info_t const * instr = &instrs[i];
+    fd_instr_info_t const * instr = instrs[i];
 
     fd_borrowed_account_t * p = NULL;
     int err = fd_txn_borrowed_account_view( txn_ctx, (fd_pubkey_t const *) &instr->program_id_pubkey, &p );
@@ -396,17 +396,17 @@ fd_cap_transaction_accounts_data_size( fd_exec_txn_ctx_t * txn_ctx,
       return FD_EXECUTOR_INSTR_ERR_MISSING_ACC;
     }
 
-    total_accounts_data_size = fd_ulong_sat_add(total_accounts_data_size, p->starting_owner_dlen);
+    total_accounts_data_size = fd_ulong_sat_add( total_accounts_data_size, p->starting_owner_dlen );
   }
 
-  if (0 == txn_ctx->loaded_accounts_data_size_limit) {
+  if( !txn_ctx->loaded_accounts_data_size_limit ) {
     txn_ctx->custom_err = 33;
     return FD_EXECUTOR_INSTR_ERR_CUSTOM_ERR;
   }
 
-  if ( total_accounts_data_size > txn_ctx->loaded_accounts_data_size_limit ) {
+  if( total_accounts_data_size > txn_ctx->loaded_accounts_data_size_limit ) {
     FD_LOG_WARNING(( "Total loaded accounts data size %lu has exceeded its set limit %lu", total_accounts_data_size, txn_ctx->loaded_accounts_data_size_limit ));
-    return FD_EXECUTOR_INSTR_ERR_MAX_ACCS_DATA_SIZE_EXCEEDED;
+    return FD_RUNTIME_TXN_ERR_INVALID_LOADED_ACCOUNTS_DATA_SIZE_LIMIT;
   }
 
   return FD_EXECUTOR_INSTR_SUCCESS;
@@ -697,9 +697,9 @@ int
 fd_execute_instr( fd_exec_txn_ctx_t * txn_ctx,
                   fd_instr_info_t *   instr ) {
   FD_SCRATCH_SCOPE_BEGIN {
-    ulong max_num_instructions = FD_FEATURE_ACTIVE( txn_ctx->slot_ctx, limit_max_instruction_trace_length ) ? 64 : ULONG_MAX;
+    ulong max_num_instructions = FD_FEATURE_ACTIVE( txn_ctx->slot_ctx, limit_max_instruction_trace_length ) ? FD_MAX_INSTRUCTION_TRACE_LENGTH : ULONG_MAX;
     if( txn_ctx->num_instructions >= max_num_instructions ) {
-      return -1;
+      return FD_EXECUTOR_INSTR_ERR_MAX_INSN_TRACE_LENS_EXCEEDED;
     }
     txn_ctx->num_instructions++;
     fd_pubkey_t const * txn_accs = txn_ctx->accounts;
@@ -730,6 +730,12 @@ fd_execute_instr( fd_exec_txn_ctx_t * txn_ctx,
       .index     = parent ? (parent->child_cnt++) : 0,
       .depth     = parent ? (parent->depth+1    ) : 0,
       .child_cnt = 0U,
+    };
+
+    /* Add the instruction to the trace */
+    txn_ctx->instr_trace[ txn_ctx->instr_trace_length++ ] = (fd_exec_instr_trace_entry_t) {
+      .instr_info = instr,
+      .stack_height = txn_ctx->instr_stack_sz,
     };
 
     // defense in depth
@@ -764,7 +770,8 @@ fd_execute_instr( fd_exec_txn_ctx_t * txn_ctx,
       ulong ending_lamports_h = 0UL;
       ulong ending_lamports_l = 0UL;
       err = fd_instr_info_sum_account_lamports( instr, &ending_lamports_h, &ending_lamports_l );
-      if( err ) {
+      if( FD_UNLIKELY( err ) ) {
+        txn_ctx->instr_stack_sz--;
         return err;
       }
 
@@ -1078,15 +1085,19 @@ fd_execute_txn( fd_exec_txn_ctx_t * txn_ctx ) {
   FD_SCRATCH_SCOPE_BEGIN {
     uint use_sysvar_instructions = fd_executor_txn_uses_sysvar_instructions( txn_ctx );
 
-    fd_instr_info_t instrs[txn_ctx->txn_descriptor->instr_cnt];
+    fd_instr_info_t * instrs[txn_ctx->txn_descriptor->instr_cnt];
     for ( ushort i = 0; i < txn_ctx->txn_descriptor->instr_cnt; i++ ) {
       fd_txn_instr_t const * txn_instr = &txn_ctx->txn_descriptor->instr[i];
-      fd_convert_txn_instr_to_instr( txn_ctx, txn_instr, txn_ctx->borrowed_accounts, &instrs[i] );
+      instrs[i] = fd_executor_acquire_instr_info_elem( txn_ctx );
+      if ( FD_UNLIKELY( instrs[i] == NULL ) ) {
+        return FD_EXECUTOR_INSTR_ERR_MAX_INSN_TRACE_LENS_EXCEEDED;
+      }
+      fd_convert_txn_instr_to_instr( txn_ctx, txn_instr, txn_ctx->borrowed_accounts, instrs[i] );
     }
 
     int ret = 0;
     if ( FD_FEATURE_ACTIVE( txn_ctx->slot_ctx, cap_transaction_accounts_data_size ) ) {
-      int ret = fd_cap_transaction_accounts_data_size( txn_ctx, instrs, txn_ctx->txn_descriptor->instr_cnt );
+      int ret = fd_cap_transaction_accounts_data_size( txn_ctx, (fd_instr_info_t const **)instrs, txn_ctx->txn_descriptor->instr_cnt );
       if ( ret != FD_EXECUTOR_INSTR_SUCCESS ) {
         fd_funk_start_write(txn_ctx->acc_mgr->funk);
         fd_funk_txn_cancel(txn_ctx->acc_mgr->funk, txn_ctx->funk_txn, 0);
@@ -1096,7 +1107,7 @@ fd_execute_txn( fd_exec_txn_ctx_t * txn_ctx ) {
     }
 
     if ( FD_UNLIKELY( use_sysvar_instructions ) ) {
-      ret = fd_sysvar_instructions_serialize_account( txn_ctx, instrs, txn_ctx->txn_descriptor->instr_cnt );
+      ret = fd_sysvar_instructions_serialize_account( txn_ctx, (fd_instr_info_t const **)instrs, txn_ctx->txn_descriptor->instr_cnt );
       if( ret != FD_ACC_MGR_SUCCESS ) {
         FD_LOG_WARNING(( "sysvar instrutions failed to serialize" ));
         return ret;
@@ -1126,10 +1137,10 @@ fd_execute_txn( fd_exec_txn_ctx_t * txn_ctx ) {
 
       if (txn_ctx->capture_ctx && txn_ctx->capture_ctx->dump_insn_to_pb && txn_ctx->slot_ctx->slot_bank.slot >= txn_ctx->capture_ctx->dump_insn_start_slot) {
         // Capture the input and convert it into a Protobuf message
-        dump_instr_to_protobuf(txn_ctx, &instrs[i], i);
+        dump_instr_to_protobuf(txn_ctx, instrs[i], i);
       }
 
-      int exec_result = fd_execute_instr( txn_ctx, &instrs[i] );
+      int exec_result = fd_execute_instr( txn_ctx, instrs[i] );
       if( exec_result != FD_EXECUTOR_INSTR_SUCCESS ) {
         if ( txn_ctx->instr_err_idx == INT_MAX )
         {
@@ -1265,12 +1276,6 @@ int fd_executor_txn_check( fd_exec_slot_ctx_t * slot_ctx,  fd_exec_txn_ctx_t *tx
     FD_LOG_DEBUG(("Lamport sum mismatch: starting %lu ending %lu", starting_lamports, ending_lamports));
     return FD_EXECUTOR_INSTR_ERR_UNBALANCED_INSTR;
   }
-#if 0
-  // cap_accounts_data_allocations_per_transaction
-  //    TODO: I am unsure if this is the correct check...
-  if (((long)ending_dlen - (long)starting_dlen) > MAX_PERMITTED_DATA_INCREASE)
-    return FD_EXECUTOR_INSTR_ERR_MAX_ACCS_DATA_SIZE_EXCEEDED;
-#endif
 
   /* TODO unused variables */
   (void)ending_dlen; (void)starting_dlen;
@@ -1335,10 +1340,24 @@ fd_executor_instr_strerror( int err ) {
   case FD_EXECUTOR_INSTR_ERR_ARITHMETIC_OVERFLOW                : return "ARITHMETIC_OVERFLOW";
   case FD_EXECUTOR_INSTR_ERR_UNSUPPORTED_SYSVAR                 : return "UNSUPPORTED_SYSVAR";
   case FD_EXECUTOR_INSTR_ERR_ILLEGAL_OWNER                      : return "ILLEGAL_OWNER";
-  case FD_EXECUTOR_INSTR_ERR_MAX_ACCS_DATA_SIZE_EXCEEDED        : return "MAX_ACCS_DATA_SIZE_EXCEEDED";
-  case FD_EXECUTOR_INSTR_ERR_ACTIVE_VOTE_ACC_CLOSE              : return "ACTIVE_VOTE_ACC_CLOSE";
+  case FD_EXECUTOR_INSTR_ERR_MAX_ACCS_DATA_ALLOCS_EXCEEDED      : return "FD_EXECUTOR_INSTR_ERR_MAX_ACCS_DATA_ALLOCS_EXCEEDED";
+  case FD_EXECUTOR_INSTR_ERR_MAX_ACCS_EXCEEDED                  : return "FD_EXECUTOR_INSTR_ERR_MAX_ACCS_EXCEEDED";
+  case FD_EXECUTOR_INSTR_ERR_MAX_INSN_TRACE_LENS_EXCEEDED       : return "FD_EXECUTOR_INSTR_ERR_MAX_INSN_TRACE_LENS_EXCEEDED";
+  case FD_EXECUTOR_INSTR_ERR_BUILTINS_MUST_CONSUME_CUS          : return "FD_EXECUTOR_INSTR_ERR_BUILTINS_MUST_CONSUME_CUS";
   default: break;
   }
 
   return "unknown";
+}
+
+fd_instr_info_t *
+fd_executor_acquire_instr_info_elem( fd_exec_txn_ctx_t * txn_ctx ) {
+
+  if ( FD_UNLIKELY( fd_instr_info_pool_free( txn_ctx->instr_info_pool ) == 0 ) ) {
+    FD_LOG_WARNING(( "no free elements remaining in the fd_instr_info_pool" ));
+    return NULL;
+  }
+
+  return &fd_instr_info_pool_ele_acquire( txn_ctx->instr_info_pool )->info;
+
 }
