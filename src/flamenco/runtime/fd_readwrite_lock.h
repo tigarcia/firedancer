@@ -104,4 +104,27 @@ fd_readwrite_end_write( fd_readwrite_lock_t * lock ) {
   }
 }
 
+/* The pattern for concurrent reads is:
+   for(;;) {
+     uint seqnum;
+     if( FD_UNLIKELY( fd_readwrite_start_concur_read( lock, &seqnum ) ) ) continue;
+     ... read some data
+     if( FD_UNLIKELY( fd_readwrite_check_concur_read( lock, seqnum ) ) ) continue;
+     return;
+   }
+*/
+
+static inline int
+fd_readwrite_start_concur_read( fd_readwrite_lock_t * lock, uint * seqnum ) {
+  *seqnum = lock->seqnum;
+  FD_COMPILER_MFENCE();
+  return ( lock->lock < 0 ? 1 : 0 );
+}
+
+static inline int
+fd_readwrite_check_concur_read( fd_readwrite_lock_t * lock, uint seqnum ) {
+  FD_COMPILER_MFENCE();
+  return ( ( (seqnum != lock->seqnum) | (lock->lock < 0) ) ? 1 : 0 );
+}
+
 #endif /* HEADER_fd_src_flamenco_runtime_fd_readwrite_lock_h */
