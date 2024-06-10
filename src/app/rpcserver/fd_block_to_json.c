@@ -277,12 +277,8 @@ int fd_block_to_json( fd_textstream_t * ts,
   EMIT_SIMPLE("{\"jsonrpc\":\"2.0\",\"result\":{");
 
   if ( meta ) {
-    fd_textstream_sprintf(ts, "\"blockHeight\":%lu,\"blockTime\":%ld,\"blockhash\":\"",
-                          blk->height, blk->ts/(long)1e9);
-    fd_hash_t const * hash = &blk->last_micro_hash;
-    fd_textstream_encode_base58(ts, hash->hash, FD_SHA256_HASH_SZ);
-    fd_textstream_sprintf(ts, "\",\"parentSlot\":%lu,",
-                          meta->parent_slot);
+    fd_textstream_sprintf(ts, "\"blockHeight\":%lu,\"blockTime\":%ld,\"parentSlot\":%lu,",
+                          blk->height, blk->ts/(long)1e9, meta->parent_slot);
   }
 
   EMIT_SIMPLE("\"transactions\":[");

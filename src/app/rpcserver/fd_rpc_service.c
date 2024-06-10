@@ -409,7 +409,7 @@ method_getBlock(struct fd_web_replier* replier, struct json_values* values, fd_r
   fd_block_t blk[1];
   fd_slot_meta_t slot_meta[1];
   ulong blk_sz;
-  uchar * blk_data = fd_blockstore_block_query_safe( ctx->blockstore, slotn, fd_libc_alloc_virtual(), blk, slot_meta, &blk_sz );
+  uchar * blk_data = fd_blockstore_block_query_volatile( ctx->blockstore, slotn, fd_libc_alloc_virtual(), blk, slot_meta, &blk_sz );
   if( blk_data == NULL ) {
     fd_web_replier_error(replier, "failed to display block for slot %lu", slotn);
     return 0;
@@ -452,7 +452,7 @@ method_getBlockHeight(struct fd_web_replier* replier, struct json_values* values
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
   fd_block_t blk[1];
   fd_slot_meta_t slot_meta[1];
-  int ret = fd_blockstore_meta_query_safe(ctx->blockstore, ctx->blockstore->smr, blk, slot_meta);
+  int ret = fd_blockstore_slot_meta_query_volatile(ctx->blockstore, ctx->blockstore->smr, blk, slot_meta);
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":%lu,\"id\":%lu}" CRLF,
                         (!ret ? blk->height : 0UL), ctx->call_id);
   fd_web_replier_done(replier);
@@ -505,7 +505,7 @@ method_getBlocks(struct fd_web_replier* replier, struct json_values* values, fd_
   for ( ulong i = startslotn; i <= endslotn && cnt < 500000U; ++i ) {
     fd_block_t blk[1];
     fd_slot_meta_t slot_meta[1];
-    int ret = fd_blockstore_meta_query_safe(ctx->blockstore, i, blk, slot_meta);
+    int ret = fd_blockstore_slot_meta_query_volatile(ctx->blockstore, i, blk, slot_meta);
     if (!ret) {
       fd_textstream_sprintf(ts, "%s%lu", (cnt==0 ? "" : ","), i);
       ++cnt;
@@ -558,7 +558,7 @@ method_getBlocksWithLimit(struct fd_web_replier* replier, struct json_values* va
   for ( ulong i = startslotn; i <= ctx->blockstore->max && cnt < limitn; ++i ) {
     fd_block_t blk[1];
     fd_slot_meta_t slot_meta[1];
-    int ret = fd_blockstore_meta_query_safe(ctx->blockstore, i, blk, slot_meta);
+    int ret = fd_blockstore_slot_meta_query_volatile(ctx->blockstore, i, blk, slot_meta);
     if (!ret) {
       fd_textstream_sprintf(ts, "%s%lu", (cnt==0 ? "" : ","), i);
       ++cnt;
@@ -648,7 +648,7 @@ method_getEpochInfo(struct fd_web_replier* replier, struct json_values* values, 
     ulong slots_per_epoch = fd_epoch_slot_cnt( &epoch_bank->epoch_schedule, epoch );
     fd_block_t blk[1];
     fd_slot_meta_t slot_meta[1];
-    int ret = fd_blockstore_meta_query_safe(ctx->blockstore, ctx->blockstore->smr, blk, slot_meta);
+    int ret = fd_blockstore_slot_meta_query_volatile(ctx->blockstore, ctx->blockstore->smr, blk, slot_meta);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"absoluteSlot\":%lu,\"blockHeight\":%lu,\"epoch\":%lu,\"slotIndex\":%lu,\"slotsInEpoch\":%lu,\"transactionCount\":%lu},\"id\":%lu}" CRLF,
                           ctx->blockstore->smr,
                           (!ret ? blk->height : 0UL),
@@ -1091,7 +1091,7 @@ method_getSignatureStatuses(struct fd_web_replier* replier, struct json_values* 
       continue;
     }
     fd_blockstore_txn_map_t elem;
-    if( fd_blockstore_txn_query_safe( ctx->blockstore, key, &elem, NULL, NULL ) ) {
+    if( fd_blockstore_txn_query_volatile( ctx->blockstore, key, &elem, NULL, NULL ) ) {
       fd_textstream_sprintf(ts, "null");
       continue;
     }
@@ -1279,7 +1279,7 @@ method_getTransaction(struct fd_web_replier* replier, struct json_values* values
   fd_blockstore_txn_map_t elem;
   long blk_ts;
   uchar txn_data_raw[FD_TXN_MTU];
-  if( fd_blockstore_txn_query_safe( ctx->blockstore, key, &elem, &blk_ts, txn_data_raw ) ) {
+  if( fd_blockstore_txn_query_volatile( ctx->blockstore, key, &elem, &blk_ts, txn_data_raw ) ) {
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":null,\"id\":%lu}" CRLF, ctx->call_id);
     fd_web_replier_done(replier);
     return 0;

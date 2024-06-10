@@ -315,9 +315,12 @@ fd_blockstore_scan_block( fd_blockstore_t * blockstore, ulong slot, fd_block_t *
   if( blockstore->min > slot ) blockstore->min = slot;
   if( blockstore->max < slot ) blockstore->max = slot;
 
+#define MAX_MICROS ( 16 << 10 )
+  fd_block_micro_t micros[MAX_MICROS];
+  ulong            micros_cnt = 0;
 #define MAX_TXNS ( 1 << 18 )
   fd_block_txn_ref_t txns[MAX_TXNS];
-  ulong                   txns_cnt = 0;
+  ulong              txns_cnt = 0;
 
   uchar * data = fd_wksp_laddr_fast( fd_blockstore_wksp( blockstore ), block->data_gaddr );
   ulong   sz   = block->data_sz;
@@ -333,9 +336,12 @@ fd_blockstore_scan_block( fd_blockstore_t * blockstore, ulong slot, fd_block_t *
     for( ulong mblk = 0; mblk < mcount; ++mblk ) {
       if( blockoff + sizeof( fd_microblock_hdr_t ) > sz )
         FD_LOG_ERR( ( "premature end of block" ) );
+      if( micros_cnt < MAX_MICROS ) {
+        fd_block_micro_t * m = micros + ( micros_cnt++ );
+        m->off               = blockoff;
+      }
       fd_microblock_hdr_t * hdr = (fd_microblock_hdr_t *)( (const uchar *)data + blockoff );
       blockoff += sizeof( fd_microblock_hdr_t );
-      fd_memcpy( block->last_micro_hash.uc, hdr->hash, sizeof(fd_hash_t) );
 
       /* Loop across transactions */
       for( ulong txn_idx = 0; txn_idx < hdr->txn_cnt; txn_idx++ ) {
@@ -395,6 +401,14 @@ fd_blockstore_scan_block( fd_blockstore_t * blockstore, ulong slot, fd_block_t *
     }
   }
 
+  fd_block_micro_t * micros_laddr =
+      fd_alloc_malloc( fd_blockstore_alloc( blockstore ),
+                       alignof( fd_block_micro_t ),
+                       sizeof( fd_block_micro_t ) * micros_cnt );
+  fd_memcpy( micros_laddr, micros, sizeof( fd_block_micro_t ) * micros_cnt );
+  block->micros_gaddr = fd_wksp_gaddr_fast( fd_blockstore_wksp( blockstore ), micros_laddr );
+  block->micros_cnt   = micros_cnt;
+
   fd_block_txn_ref_t * txns_laddr =
       fd_alloc_malloc( fd_blockstore_alloc( blockstore ),
                        alignof( fd_block_txn_ref_t ),
@@ -436,6 +450,7 @@ fd_blockstore_slot_remove( fd_blockstore_t * blockstore, ulong slot ) {
           fd_blockstore_txn_map_remove( txn_map, &sig );
         }
       }
+      if( block->micros_gaddr ) fd_alloc_free( alloc, fd_wksp_laddr_fast( wksp, block->micros_gaddr ) );
       if( block->txns_gaddr )   fd_alloc_free( alloc, txns );
       fd_alloc_free( alloc, block );
     }
@@ -540,7 +555,6 @@ fd_blockstore_deshred( fd_blockstore_t * blockstore, ulong slot ) {
   }
 
   fd_memset( block, 0, sizeof(fd_block_t) );
-  block->tot_sz       = tot_sz;
   block->ts           = fd_log_wallclock();
 
   uchar * data_laddr  = (uchar *)((ulong)block + data_off);
@@ -842,9 +856,17 @@ fd_blockstore_block_query( fd_blockstore_t * blockstore, ulong slot ) {
 
 fd_hash_t const *
 fd_blockstore_block_hash_query( fd_blockstore_t * blockstore, ulong slot ) {
-  fd_block_t * blk = fd_blockstore_block_query( blockstore, slot );
-  if( FD_UNLIKELY( !blk ) ) return NULL;
-  return &blk->last_micro_hash;
+  fd_blockstore_slot_map_t * query =
+      fd_blockstore_slot_map_query( fd_blockstore_slot_map( blockstore ), &slot, NULL );
+  if( FD_UNLIKELY( !query || query->block_gaddr == 0 ) ) return NULL;
+  fd_wksp_t *  wksp = fd_blockstore_wksp( blockstore );
+  fd_block_t * blk  = fd_wksp_laddr_fast( wksp, query->block_gaddr );
+  if( FD_UNLIKELY( blk->micros_gaddr == 0 ) ) return NULL;
+  fd_block_micro_t * micros = fd_wksp_laddr_fast( wksp, blk->micros_gaddr );
+  uchar *            data   = fd_wksp_laddr_fast( wksp, blk->data_gaddr );
+  fd_microblock_hdr_t * last_micro =
+      (fd_microblock_hdr_t *)( data + micros[blk->micros_cnt - 1].off );
+  return (fd_hash_t *)fd_type_pun( last_micro->hash );
 }
 
 fd_hash_t const *
@@ -881,7 +903,7 @@ fd_blockstore_next_slot_query( fd_blockstore_t * blockstore, ulong slot , ulong 
 }
 
 uchar *
-fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out ) {
+fd_blockstore_block_query_volatile( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out ) {
   /* WARNING: this code is extremely delicate. Do NOT modify without
      understanding all the invariants. In particular, we must never
      dereference through a corrupt pointer. It's OK for the
@@ -911,7 +933,7 @@ fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_val
 
     if( FD_UNLIKELY( fd_readwrite_check_concur_read( &blockstore->lock, seqnum ) ) ) continue;
 
-    uchar * data_out = fd_valloc_malloc( alloc, 8UL, sz );
+    uchar * data_out = fd_valloc_malloc( alloc, 128UL, sz );
     if( FD_UNLIKELY( data_out == NULL ) ) return NULL;
     fd_memcpy( data_out, fd_wksp_laddr_fast( wksp, ptr ), sz );
 
@@ -925,7 +947,7 @@ fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_val
 }
 
 int
-fd_blockstore_meta_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out ) {
+fd_blockstore_slot_meta_query_volatile( fd_blockstore_t * blockstore, ulong slot, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out ) {
   /* WARNING: this code is extremely delicate. Do NOT modify without
      understanding all the invariants. In particular, we must never
      dereference through a corrupt pointer. It's OK for the
@@ -966,7 +988,7 @@ fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED2551
 }
 
 int
-fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, long * blk_ts, uchar txn_data_out[FD_TXN_MTU] ) {
+fd_blockstore_txn_query_volatile( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, long * blk_ts, uchar txn_data_out[FD_TXN_MTU] ) {
   /* WARNING: this code is extremely delicate. Do NOT modify without
      understanding all the invariants. In particular, we must never
      dereference through a corrupt pointer. It's OK for the

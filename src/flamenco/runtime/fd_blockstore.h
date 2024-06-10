@@ -153,7 +153,6 @@ struct fd_block {
   long      ts;         /* timestamp in nanosecs */
   ulong     height;     /* block height */
   fd_hash_t bank_hash;
-  fd_hash_t last_micro_hash;
   uchar     flags;
 
   /* data region
@@ -166,11 +165,12 @@ struct fd_block {
   Note random access of individual shred indices is not performant, due to the variable-length
   nature of shreds. */
 
-  ulong tot_sz;       /* total size of block allocation */
   ulong data_gaddr;   /* ptr to the beginning of the block's allocated data region */
   ulong data_sz;      /* block size */
   ulong shreds_gaddr; /* ptr to the list of fd_blockstore_shred_t */
   ulong shreds_cnt;
+  ulong micros_gaddr; /* ptr to the list of fd_blockstore_micro_t */
+  ulong micros_cnt;
   ulong txns_gaddr;   /* ptr to the list of fd_blockstore_txn_ref_t */
   ulong txns_cnt;
 };
@@ -468,25 +468,26 @@ fd_blockstore_block_frontier_query( fd_blockstore_t * blockstore,
                                     ulong *           parents,
                                     ulong             parents_sz );
 
-/* Query the block data and meta in a thread-safe manner which will
-   not block writes. The data and meta is copied out into memory
+/* Query the block data and metadata in a thread-safe manner which will
+   not block writes. The data and metadata are copied out into memory
    allocated with the given alloc. A NULL is returned on error. */
 uchar *
-fd_blockstore_block_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out );
+fd_blockstore_block_query_volatile( fd_blockstore_t * blockstore, ulong slot, fd_valloc_t alloc, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out, ulong * data_sz_out );
 
-/* Query the block meta data in a thread-safe manner which will
-   not block writes. The meta is copied out. */
+/* Query the block metadata in a thread-safe manner which will
+   not block writes. The metadata is copied out. */
 int
-fd_blockstore_meta_query_safe( fd_blockstore_t * blockstore, ulong slot, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out );
+fd_blockstore_slot_meta_query_volatile( fd_blockstore_t * blockstore, ulong slot, fd_block_t * blk_out, fd_slot_meta_t * slot_meta_out );
 
 /* Query the transaction data for the given signature */
 fd_blockstore_txn_map_t *
-fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ] );
+fd_blockstore_txn_query( fd_blockstore_t * blockstore, uchar const sig[static FD_ED25519_SIG_SZ] );
 
 /* Query the transaction data for the given signature in a thread
- * safe manner */
+   safe manner. The transaction data is copied out. txn_data_out can
+   be NULL if you are only interested in the transaction metadata. */
 int
-fd_blockstore_txn_query_safe( fd_blockstore_t * blockstore, uchar const sig[FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, long * blk_ts, uchar txn_data_out[FD_TXN_MTU] );
+fd_blockstore_txn_query_volatile( fd_blockstore_t * blockstore, uchar const sig[static FD_ED25519_SIG_SZ], fd_blockstore_txn_map_t * txn_out, long * blk_ts, uchar txn_data_out[FD_TXN_MTU] );
 
 /* Remove slot from blockstore, including all relevant internal structures. */
 int

@@ -124,7 +124,7 @@ fd_readwrite_start_concur_read( fd_readwrite_lock_t * lock, uint * seqnum ) {
 static inline int
 fd_readwrite_check_concur_read( fd_readwrite_lock_t * lock, uint seqnum ) {
   FD_COMPILER_MFENCE();
-  return ( ( (seqnum != lock->seqnum) | (lock->lock < 0) ) ? 1 : 0 );
+  return ( ( (int)(seqnum != lock->seqnum) | (int)(lock->lock < 0) ) ? 1 : 0 );
 }
 
 #endif /* HEADER_fd_src_flamenco_runtime_fd_readwrite_lock_h */
