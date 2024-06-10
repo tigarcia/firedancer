@@ -940,6 +940,21 @@ replay( fd_ledger_args_t * args ) {
       fd_runtime_read_genesis( slot_ctx, args->genesis, args->snapshot != NULL, capture_ctx );
     }
 
+  } else {
+        uchar * epoch_ctx_mem = fd_wksp_alloc_laddr( wksp, fd_exec_epoch_ctx_align(), fd_exec_epoch_ctx_footprint( args->vote_acct_max ), FD_EXEC_EPOCH_CTX_MAGIC );
+    fd_exec_epoch_ctx_t * epoch_ctx = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem, args->vote_acct_max ) );
+
+    uchar slot_ctx_mem[FD_EXEC_SLOT_CTX_FOOTPRINT] __attribute__((aligned(FD_EXEC_SLOT_CTX_ALIGN)));
+    fd_exec_slot_ctx_t * slot_ctx = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem, fd_alloc_virtual( args->alloc ) ) );
+    slot_ctx->epoch_ctx = epoch_ctx;
+
+    fd_acc_mgr_t mgr[1];
+    slot_ctx->acc_mgr = fd_acc_mgr_new( mgr, funk );
+    slot_ctx->blockstore = args->blockstore;
+    if( args->incremental ) {
+      fd_snapshot_load( args->incremental, slot_ctx, args->verify_acc_hash, args->check_acc_hash, FD_SNAPSHOT_TYPE_INCREMENTAL );
+      FD_LOG_NOTICE(( "imported %lu records from snapshot", fd_funk_rec_cnt( fd_funk_rec_map( funk, fd_funk_wksp( funk ) ) ) ));
+    }
   }
 
 

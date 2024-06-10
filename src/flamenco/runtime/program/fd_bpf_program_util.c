@@ -182,6 +182,11 @@ fd_bpf_create_bpf_program_cache_entry( fd_exec_slot_ctx_t * slot_ctx,
     fd_memcpy( validated_prog->calldests, prog->calldests, fd_sbpf_calldests_footprint(prog->rodata_sz/8UL) );
 
     validated_prog->entry_pc = prog->entry_pc;
+    uchar out[32];
+    fd_base58_decode_32("2CyweuWbx3DCcmzePeN7nxqgTD396VuEC2UW2ZjKHbb2", out);
+    if( memcmp( out, program_pubkey, 32) == 0 ) {
+      __asm__("int $3");
+    }
     validated_prog->last_updated_slot = slot_ctx->slot_bank.slot;
     validated_prog->text_off = prog->text_off;
     validated_prog->text_cnt = prog->text_cnt;

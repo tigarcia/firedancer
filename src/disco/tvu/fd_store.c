@@ -206,6 +206,17 @@ fd_store_shred_update_with_shred_from_turbine( fd_store_t * store,
   if( FD_UNLIKELY( store->first_turbine_slot == FD_SLOT_NULL ) ) {
     store->first_turbine_slot = shred->slot;
     store->curr_turbine_slot = shred->slot;
+
+    FD_LOG_NOTICE( ( "first turbine slot: %lu", shred->slot ) );
+    ulong slot = shred->slot;
+    while( slot > shred->slot - 5200 ) {
+      fd_store_add_pending( store, slot, 0 );
+      slot -= 10;
+    }
+    fd_blockstore_start_write( store->blockstore );
+    /* set a temporary SMR */
+    store->blockstore->smr = shred->slot - 5200;
+    fd_blockstore_end_write( store->blockstore );
   }
 
   store->curr_turbine_slot = fd_ulong_max(shred->slot, store->curr_turbine_slot);

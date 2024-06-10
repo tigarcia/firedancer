@@ -1086,6 +1086,15 @@ fd_execute_txn_finalize( fd_exec_slot_ctx_t * slot_ctx,
 
 int
 fd_execute_txn( fd_exec_txn_ctx_t * txn_ctx ) {
+  uchar * sig = (uchar *)txn_ctx->_txn_raw->raw + txn_ctx->txn_descriptor->signature_off;
+  FD_LOG_NOTICE( ( "executing sig: %64J", sig ) );
+  uchar sig_actual[64] = { 0 };
+  fd_base58_decode_64(
+      "4mLPkJxJaMv67DtHKqWdBWaVr99abeV2gWcx4tvmGzqqw2PrXcvCsNwwb2C7khCY5x85PaWN3cZoEAY26XjDaiYT",
+      sig_actual );
+  int bp = 0 == memcmp( sig, sig_actual, 64 );
+
+
   FD_SCRATCH_SCOPE_BEGIN {
     uint use_sysvar_instructions = fd_executor_txn_uses_sysvar_instructions( txn_ctx );
 
@@ -1141,9 +1150,9 @@ fd_execute_txn( fd_exec_txn_ctx_t * txn_ctx ) {
         // Capture the input and convert it into a Protobuf message
         dump_instr_to_protobuf(txn_ctx, instrs[i], i);
       }
-
       int exec_result = fd_execute_instr( txn_ctx, instrs[i] );
       if( exec_result != FD_EXECUTOR_INSTR_SUCCESS ) {
+        if (bp && i == 3) __asm__("int $3");
         if ( txn_ctx->instr_err_idx == INT_MAX )
         {
           txn_ctx->instr_err_idx = i;

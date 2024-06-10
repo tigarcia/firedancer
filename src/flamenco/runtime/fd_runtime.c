@@ -1483,6 +1483,7 @@ fd_runtime_execute_txns_in_waves_tpool( fd_exec_slot_ctx_t * slot_ctx,
 
     /* Setup all txns as incomplete and set the capture context */
     for( ulong i = 0; i < txn_cnt; i++ ) {
+
       incomplete_txn_idxs[i] = i;
       incomplete_accounts_cnt += task_infos[i].txn_ctx->accounts_cnt;
       task_infos[i].txn_ctx->capture_ctx = capture_ctx;
