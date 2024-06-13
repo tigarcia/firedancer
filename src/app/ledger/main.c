@@ -136,7 +136,7 @@ struct fd_ledger_args {
 };
 typedef struct fd_ledger_args fd_ledger_args_t;
 
-fd_valloc_t allocator_setup( fd_wksp_t *  wksp, char const * allocator ) {
+fd_valloc_t allocator_setup( fd_wksp_t * wksp, char const * allocator ) {
   FD_TEST( wksp );
 
   void * alloc_shmem =
@@ -220,8 +220,13 @@ runtime_replay( fd_runtime_ctx_t * state, fd_runtime_args_t * runtime_args, fd_l
   if( runtime_args->on_demand_block_ingest ) {
     fd_rocksdb_init( &rocks_db, ledger_args->rocksdb_list[ 0UL ] );
     fd_rocksdb_root_iter_new( &iter );
-    if( fd_rocksdb_root_iter_seek( &iter, &rocks_db, start_slot, &slot_meta, state->slot_ctx->valloc ) ) {
-      FD_LOG_ERR(( "unable to seek to first slot" ));
+    /* Handle the case where the snapshot slot + 1 is not rooted. Check the next
+       32 slots before returning an error */ 
+    for( ulong i = 0; i<FD_RUNTIME_NUM_ROOT_BLOCKS; ++i ) {
+      if( fd_rocksdb_root_iter_seek( &iter, &rocks_db, start_slot, &slot_meta, state->slot_ctx->valloc ) ) {
+        break;
+      }
+      ++start_slot;
     }
   }
 
@@ -414,15 +419,21 @@ ingest_rocksdb( fd_alloc_t *      alloc,
   fd_slot_meta_t slot_meta;
   fd_memset( &slot_meta, 0, sizeof(slot_meta) );
 
-  int ret = fd_rocksdb_root_iter_seek( &iter, &rocks_db, start_slot, &slot_meta, valloc );
-  if( ret < 0 ) {
-    FD_LOG_ERR(( "fd_rocksdb_root_iter_seek returned %d", ret ));
+  /* Handle the case where the snapshot slot + 1 is not rooted. Check the next
+     32 slots before returning an error */ 
+  for( ulong i = 0; i<FD_RUNTIME_NUM_ROOT_BLOCKS; ++i ) {
+    if( fd_rocksdb_root_iter_seek( &iter, &rocks_db, start_slot, &slot_meta, valloc ) ) {
+      break;
+    }
+    ++start_slot;
   }
+  FD_LOG_NOTICE(( "First rooted slot is %lu", start_slot ));
 
   uchar trash_hash_buf[32];
   memset( trash_hash_buf, 0xFE, sizeof(trash_hash_buf) );
 
   ulong blk_cnt = 0;
+  int ret = 0;
   do {
     ulong slot = slot_meta.slot;
     if( slot > end_slot ) {
@@ -932,7 +943,7 @@ replay( fd_ledger_args_t * args ) {
   }
 
 
-  fd_valloc_t valloc = allocator_setup( args->funk_wksp, args->allocator );
+  fd_valloc_t valloc = allocator_setup( args->wksp, args->allocator );
 
   void * tpool_scr_mem = setup_tpool( &state, &runtime_args, valloc );
 
@@ -1098,7 +1109,7 @@ prune( fd_ledger_args_t * args ) {
   fd_tvu_gossip_deliver_arg_t gossip_deliver_arg[1];
   fd_replay_t * replay = NULL;
 
-  fd_valloc_t valloc = allocator_setup( runtime_args.funk_wksp, runtime_args.allocator );
+  fd_valloc_t valloc = allocator_setup( args->wksp, runtime_args.allocator );
 
   void * tpool_scr_mem = setup_tpool( &state, &runtime_args, valloc );
 

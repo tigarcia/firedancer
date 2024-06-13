@@ -98,7 +98,6 @@ solana_labs_boot( config_t * config ) {
   ADD( "--ledger", config->ledger.path );
   if( strcmp( "", config->ledger.accounts_path ) ) ADD( "--accounts", config->ledger.accounts_path );
   ADDU( "--limit-ledger-size", config->ledger.limit_size );
-  if( config->ledger.bigtable_storage ) ADD1( "--enable-rpc-bigtable-ledger-storage" );
   for( ulong i=0; i<config->ledger.account_indexes_cnt; i++ )
     ADD( "--account-index", config->ledger.account_indexes[ i ] );
   for( ulong i=0; i<config->ledger.account_index_exclude_keys_cnt; i++ )
@@ -128,6 +127,7 @@ solana_labs_boot( config_t * config ) {
   if( config->rpc.only_known ) ADD1( "--only-known-rpc" );
   if( config->rpc.pubsub_enable_block_subscription ) ADD1( "--rpc-pubsub-enable-block-subscription" );
   if( config->rpc.pubsub_enable_vote_subscription ) ADD1( "--rpc-pubsub-enable-vote-subscription" );
+  if( config->rpc.bigtable_ledger_storage ) ADD1( "--enable-rpc-bigtable-ledger-storage" );
 
   /* snapshots */
   if( !config->snapshots.incremental_snapshots ) ADD1( "--no-incremental-snapshots" );
@@ -203,7 +203,7 @@ solana_labs_main( void * args ) {
                                  &fd_tile_private_stack0, &fd_tile_private_stack1 );
   FD_LOG_NOTICE(( "booting solana pid:%lu", fd_log_group_id() ));
 
-  fd_sandbox( 0, config->uid, config->gid, 0UL, 0, NULL, 0, NULL );
+  fd_sandbox_switch_uid_gid( config->uid, config->gid );
 
   solana_labs_boot( config );
   return 0;

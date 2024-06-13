@@ -347,24 +347,33 @@ fd_executor_setup_accessed_accounts_for_txn( fd_exec_txn_ctx_t * txn_ctx ) {
   }
 }
 
+int
+fd_should_set_exempt_rent_epoch_max( fd_rent_t const *       rent,
+                                     fd_borrowed_account_t * rec ) {
+  if( fd_pubkey_is_sysvar_id( rec->pubkey ) ) {
+    return 0;
+  }
+
+  if( rec->const_meta->info.lamports < fd_rent_exempt_minimum_balance2( rent, rec->const_meta->dlen ) )
+    return 0;
+  if( rec->const_meta->info.rent_epoch == ULONG_MAX )
+    return 0;
+
+  return 1;                      
+}
+
 void
-fd_set_exempt_rent_epoch_max( fd_exec_txn_ctx_t * txn_ctx,
-                              void const *        addr ) {
+fd_txn_set_exempt_rent_epoch_max( fd_exec_txn_ctx_t * txn_ctx,
+                                  void const *        addr ) {
   fd_borrowed_account_t * rec = NULL;
   int err = fd_txn_borrowed_account_view( txn_ctx, (fd_pubkey_t const *)addr, &rec);
   if( FD_UNLIKELY( err==FD_ACC_MGR_ERR_UNKNOWN_ACCOUNT ) )
     return;
   FD_TEST( err==FD_ACC_MGR_SUCCESS );
 
-  if( fd_pubkey_is_sysvar_id( rec->pubkey ) ) {
+  if( !fd_should_set_exempt_rent_epoch_max( &txn_ctx->epoch_ctx->epoch_bank.rent, rec ) ) {
     return;
   }
-
-  fd_epoch_bank_t * epoch_bank = fd_exec_epoch_ctx_epoch_bank( txn_ctx->slot_ctx->epoch_ctx );
-  if( rec->const_meta->info.lamports < fd_rent_exempt_minimum_balance2( &epoch_bank->rent,rec->const_meta->dlen ) )
-    return;
-  if( rec->const_meta->info.rent_epoch == ULONG_MAX )
-    return;
 
   err = fd_txn_borrowed_account_modify( txn_ctx, (fd_pubkey_t const *)addr, 0, &rec);
   FD_TEST( err==FD_ACC_MGR_SUCCESS );
@@ -846,15 +855,13 @@ fd_executor_setup_borrowed_accounts_for_txn( fd_exec_txn_ctx_t * txn_ctx ) {
     }
 
     if( FD_UNLIKELY( memcmp( meta->info.owner, fd_solana_bpf_loader_upgradeable_program_id.key, sizeof(fd_pubkey_t) ) == 0 ) ) {
-      fd_bpf_upgradeable_loader_state_t program_loader_state;
+      fd_bpf_upgradeable_loader_state_t program_loader_state = {0};
       int err = 0;
       if( FD_UNLIKELY( !read_bpf_upgradeable_loader_state_for_program( txn_ctx, (uchar) i, &program_loader_state, &err ) ) ) {
         continue;
       }
-      fd_bincode_destroy_ctx_t ctx_d = { .valloc = txn_ctx->valloc };
 
       if( !fd_bpf_upgradeable_loader_state_is_program( &program_loader_state ) ) {
-        fd_bpf_upgradeable_loader_state_destroy( &program_loader_state, &ctx_d );
         continue;
       }
 
@@ -1011,7 +1018,7 @@ fd_execute_txn_prepare_phase4( fd_exec_slot_ctx_t * slot_ctx,
       ulong i = fd_txn_acct_iter_idx( ctrl );
       if( (i == 0) || fd_pubkey_is_sysvar_id( &tx_accs[i] ) )
         continue;
-      fd_set_exempt_rent_epoch_max( txn_ctx, &tx_accs[i] );
+      fd_txn_set_exempt_rent_epoch_max( txn_ctx, &tx_accs[i] );
     }
   }
 
@@ -1058,7 +1065,7 @@ fd_execute_txn_finalize( fd_exec_slot_ctx_t * slot_ctx,
     if( txn_ctx->unknown_accounts[i] ) {
       memset( acc_rec->meta->hash, 0xFF, sizeof(fd_hash_t) );
       if( FD_FEATURE_ACTIVE( slot_ctx, set_exempt_rent_epoch_max ) ) {
-        fd_set_exempt_rent_epoch_max( txn_ctx, &txn_ctx->accounts[i] );
+        fd_txn_set_exempt_rent_epoch_max( txn_ctx, &txn_ctx->accounts[i] );
       }
     }
 
@@ -1349,7 +1356,7 @@ fd_instr_info_t *
 fd_executor_acquire_instr_info_elem( fd_exec_txn_ctx_t * txn_ctx ) {
 
   if ( FD_UNLIKELY( fd_instr_info_pool_free( txn_ctx->instr_info_pool ) == 0 ) ) {
-    FD_LOG_WARNING(( "no free elements remaining in the fd_instr_info_pool" ));
+    FD_LOG_DEBUG(( "no free elements remaining in the fd_instr_info_pool" ));
     return NULL;
   }
 

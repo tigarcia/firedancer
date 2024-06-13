@@ -29,18 +29,20 @@ run_cmd_perm( args_t *         args,
 
   ulong mlock_limit = fd_topo_mlock_max_tile( &config->topo );
 
-  fd_caps_check_resource(     caps, NAME, RLIMIT_MEMLOCK, mlock_limit, "increase `RLIMIT_MEMLOCK` to lock the workspace in memory with `mlock(2)`" );
+  fd_caps_check_resource(     caps, NAME, RLIMIT_MEMLOCK, mlock_limit, "call `rlimit(2)` to increase `RLIMIT_MEMLOCK` so all memory can be locked with `mlock(2)`" );
   fd_caps_check_resource(     caps, NAME, RLIMIT_NICE,    40,          "call `setpriority(2)` to increase thread priorities" );
   fd_caps_check_resource(     caps, NAME, RLIMIT_NOFILE,  CONFIGURE_NR_OPEN_FILES,
-                                                                       "increase `RLIMIT_NOFILE` to allow more open files for Solana Labs" );
-  fd_caps_check_capability(   caps, NAME, CAP_NET_RAW,                 "call `bind(2)` to bind to a socket with `SOCK_RAW`" );
-  fd_caps_check_capability(   caps, NAME, CAP_SYS_ADMIN,               "initialize XDP by calling `bpf_obj_get`" );
+                                                                       "call `rlimit(2)  to increase `RLIMIT_NOFILE` to allow more open files for Agave" );
+  fd_caps_check_capability(   caps, NAME, CAP_NET_RAW,                 "call `socket(2)` to bind to a raw socket for use by XDP" );
+  fd_caps_check_capability(   caps, NAME, CAP_SYS_ADMIN,               "call `bpf(2)` with the `BPF_OBJ_GET` command to initialize XDP" );
   if( FD_LIKELY( getuid() != config->uid ) )
-    fd_caps_check_capability( caps, NAME, CAP_SETUID,                  "switch uid by calling `setuid(2)`" );
+    fd_caps_check_capability( caps, NAME, CAP_SETUID,                  "call `setresuid(2)` to switch uid" );
   if( FD_LIKELY( getgid() != config->gid ) )
-    fd_caps_check_capability( caps, NAME, CAP_SETGID,                  "switch gid by calling `setgid(2)`" );
+    fd_caps_check_capability( caps, NAME, CAP_SETGID,                  "call `setresgid(2)` to switch gid" );
   if( FD_UNLIKELY( config->development.netns.enabled ) )
-    fd_caps_check_capability( caps, NAME, CAP_SYS_ADMIN,               "enter a network namespace by calling `setns(2)`" );
+    fd_caps_check_capability( caps, NAME, CAP_SYS_ADMIN,               "call `setns(2)` to enter a network namespace" );
+  if( FD_UNLIKELY( config->tiles.metric.prometheus_listen_port<1024 ) )
+    fd_caps_check_capability( caps, NAME, CAP_NET_BIND_SERVICE,        "call `bind(2)` to bind to a privileged port for serving metrics" );
 }
 
 struct pidns_clone_args {
@@ -101,7 +103,16 @@ execve_solana_labs( int config_memfd,
     char config_fd[ 32 ];
     FD_TEST( fd_cstr_printf_check( config_fd, sizeof( config_fd ), NULL, "%d", config_memfd ) );
     char * args[ 5 ] = { _current_executable_path, "run-solana", "--config-fd", config_fd, NULL };
-    if( FD_UNLIKELY( -1==execve( _current_executable_path, args, NULL ) ) ) FD_LOG_ERR(( "execve() failed (%i-%s)", errno, fd_io_strerror( errno ) ));
+
+    char * envp[] = { NULL, NULL };
+    char * google_creds = getenv( "GOOGLE_APPLICATION_CREDENTIALS" );
+    char provide_creds[ PATH_MAX+30UL ];
+    if( FD_UNLIKELY( google_creds ) ) {
+      FD_TEST( fd_cstr_printf_check( provide_creds, sizeof( provide_creds ), NULL, "GOOGLE_APPLICATION_CREDENTIALS=%s", google_creds ) );
+      envp[ 0 ] = provide_creds;
+    }
+
+    if( FD_UNLIKELY( -1==execve( _current_executable_path, args, envp ) ) ) FD_LOG_ERR(( "execve() failed (%i-%s)", errno, fd_io_strerror( errno ) ));
   } else {
     if( FD_UNLIKELY( -1==fcntl( pipefd, F_SETFD, FD_CLOEXEC ) ) ) FD_LOG_ERR(( "fcntl(F_SETFD,FD_CLOEXEC) failed (%i-%s)", errno, fd_io_strerror( errno ) ));
     return child;
@@ -251,14 +262,18 @@ main_pid_namespace( void * _args ) {
   struct sock_filter seccomp_filter[ 128UL ];
   populate_sock_filter_policy_pidns( 128UL, seccomp_filter, (uint)fd_log_private_logfile_fd() );
 
-  fd_sandbox( config->development.sandbox,
-              config->uid,
-              config->gid,
-              1+child_cnt, /* RLIMIT_NOFILE needs to be set to the nfds argument of poll() */
-              allow_fds_cnt,
-              allow_fds,
-              sock_filter_policy_pidns_instr_cnt,
-              seccomp_filter );
+  if( FD_LIKELY( config->development.sandbox ) ) {
+    fd_sandbox_enter( config->uid,
+                      config->gid,
+                      0,
+                      1UL+child_cnt, /* RLIMIT_NOFILE needs to be set to the nfds argument of poll() */
+                      allow_fds_cnt,
+                      allow_fds,
+                      sock_filter_policy_pidns_instr_cnt,
+                      seccomp_filter );
+  } else {
+    fd_sandbox_switch_uid_gid( config->uid, config->gid );
+  }
 
   /* Reap child process PIDs so they don't show up in `ps` etc.  All of
      these children should have exited immediately after clone(2)'ing
@@ -390,6 +405,23 @@ run_firedancer( config_t * const config,
   /* dump the topology we are using to the output log */
   fd_topo_print_log( 0, &config->topo );
 
+#if defined(__x86_64__)
+
+#ifndef SYS_landlock_create_ruleset
+#define SYS_landlock_create_ruleset 444
+#endif
+
+#ifndef LANDLOCK_CREATE_RULESET_VERSION
+#define LANDLOCK_CREATE_RULESET_VERSION (1U << 0)
+#endif
+
+#endif
+  long abi = syscall( SYS_landlock_create_ruleset, NULL, 0, LANDLOCK_CREATE_RULESET_VERSION );
+  if( -1L==abi && (errno==ENOSYS || errno==EOPNOTSUPP ) ) {
+    FD_LOG_WARNING(( "The Landlock access control system is not supported by your Linux kernel. Firedancer uses landlock to "
+                     "provide an additional layer of security to the sandbox, but it is not required." ));
+  }
+
   if( FD_UNLIKELY( close( 0 ) ) ) FD_LOG_ERR(( "close(0) failed (%i-%s)", errno, fd_io_strerror( errno ) ));
   if( FD_UNLIKELY( fd_log_private_logfile_fd()!=1 && close( 1 ) ) ) FD_LOG_ERR(( "close(1) failed (%i-%s)", errno, fd_io_strerror( errno ) ));
 
@@ -417,14 +449,19 @@ run_firedancer( config_t * const config,
   if( FD_UNLIKELY( parent_pipefd!=-1 ) )
     allow_fds[ allow_fds_cnt++ ] = parent_pipefd; /* write end of parent pipe */
 
-  fd_sandbox( config->development.sandbox,
-              config->uid,
-              config->gid,
-              0UL,
-              allow_fds_cnt,
-              allow_fds,
-              sock_filter_policy_main_instr_cnt,
-              seccomp_filter );
+  if( FD_LIKELY( config->development.sandbox ) ) {
+    fd_sandbox_enter( config->uid,
+                      config->gid,
+                      1, /* Keep controlling terminal for main so it can receive Ctrl+C */
+                      0UL,
+                      allow_fds_cnt,
+                      allow_fds,
+                      sock_filter_policy_main_instr_cnt,
+                      seccomp_filter );
+  } else {
+    fd_sandbox_switch_uid_gid( config->uid, config->gid );
+  }
+
 
   /* the only clean way to exit is SIGINT or SIGTERM on this parent process,
      so if wait4() completes, it must be an error */
