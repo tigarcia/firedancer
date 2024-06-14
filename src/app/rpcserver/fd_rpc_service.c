@@ -69,11 +69,10 @@ read_account_with_xid( fd_rpc_ctx_t * ctx, fd_pubkey_t * acct, fd_funk_txn_xid_t
 
 /* LEAVES THE LOCK IN READ MODE */
 fd_epoch_bank_t *
-read_epoch_bank( fd_rpc_ctx_t * ctx, fd_valloc_t valloc ) {
+read_epoch_bank( fd_rpc_ctx_t * ctx, fd_valloc_t valloc, ulong smr ) {
   fd_rpc_global_ctx_t * glob = ctx->global;
   fd_readwrite_start_read( &glob->lock );
 
-  ulong smr = glob->blockstore->smr;
   if( glob->epoch_bank != NULL &&
       glob->epoch_bank_epoch == fd_slot_to_epoch(&glob->epoch_bank->epoch_schedule, smr, NULL) ) {
     /* Leave lock held */
@@ -664,17 +663,18 @@ method_getEpochInfo(struct fd_web_replier* replier, struct json_values* values, 
   (void)values;
   FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
-    fd_slot_bank_t * slot_bank = read_slot_bank(ctx, fd_scratch_virtual());
     fd_blockstore_t * blockstore = ctx->global->blockstore;
+    ulong smr = blockstore->smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
+    fd_slot_bank_t * slot_bank = read_slot_bank(ctx, fd_scratch_virtual());
     ulong slot_idx = 0;
-    ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, blockstore->smr, &slot_idx );
+    ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, smr, &slot_idx );
     ulong slots_per_epoch = fd_epoch_slot_cnt( &epoch_bank->epoch_schedule, epoch );
     fd_block_t blk[1];
     fd_slot_meta_t slot_meta[1];
-    int ret = fd_blockstore_slot_meta_query_volatile(blockstore, blockstore->smr, blk, slot_meta);
+    int ret = fd_blockstore_slot_meta_query_volatile(blockstore, smr, blk, slot_meta);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"absoluteSlot\":%lu,\"blockHeight\":%lu,\"epoch\":%lu,\"slotIndex\":%lu,\"slotsInEpoch\":%lu,\"transactionCount\":%lu},\"id\":%lu}" CRLF,
-                          blockstore->smr,
+                          smr,
                           (!ret ? blk->height : 0UL),
                           epoch,
                           slot_idx,
@@ -695,7 +695,8 @@ method_getEpochSchedule(struct fd_web_replier* replier, struct json_values* valu
   (void)values;
   FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
+    ulong smr = ctx->global->blockstore->smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"firstNormalEpoch\":%lu,\"firstNormalSlot\":%lu,\"leaderScheduleSlotOffset\":%lu,\"slotsPerEpoch\":%lu,\"warmup\":%s},\"id\":%lu}" CRLF,
     epoch_bank->epoch_schedule.first_normal_epoch,
     epoch_bank->epoch_schedule.first_normal_slot,
@@ -761,7 +762,8 @@ static int
 method_getGenesisHash(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void)values;
   FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
+    ulong smr = ctx->global->blockstore->smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":\"");
     fd_textstream_encode_base58(ts, epoch_bank->genesis_hash.uc, sizeof(fd_pubkey_t));
@@ -866,7 +868,7 @@ method_getLargestAccounts(struct fd_web_replier* replier, struct json_values* va
 static int
 method_getLatestBlockhash(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void)values;
-  FD_METHOD_SCRATCH_BEGIN( 1<<29 ) { /* read_epoch consumes a ton of scratch space! */
+  FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_slot_bank_t * slot_bank = read_slot_bank(ctx, fd_scratch_virtual());
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":{\"blockhash\":\"",
@@ -921,7 +923,8 @@ method_getMinimumBalanceForRentExemption(struct fd_web_replier* replier, struct 
     ulong size_sz = 0;
     const void* size = json_get_value(values, PATH_SIZE, 3, &size_sz);
     ulong sizen = (size == NULL ? 0UL : (ulong)(*(long*)size));
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
+    ulong smr = ctx->global->blockstore->smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
     ulong min_balance = fd_rent_exempt_minimum_balance2(&epoch_bank->rent, sizen);
 
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
@@ -1371,7 +1374,8 @@ vote_account_to_json(fd_textstream_t * ts, fd_vote_accounts_pair_t_mapnode_t * v
 static int
 method_getVoteAccounts(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
+    ulong smr = ctx->global->blockstore->smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
     fd_vote_accounts_t * accts = &epoch_bank->stakes.vote_accounts;
     fd_vote_accounts_pair_t_mapnode_t * root = accts->vote_accounts_root;
     fd_vote_accounts_pair_t_mapnode_t * pool = accts->vote_accounts_pool;
