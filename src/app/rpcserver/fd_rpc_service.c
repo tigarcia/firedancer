@@ -43,6 +43,8 @@ struct fd_rpc_global_ctx {
   struct fd_ws_subscription sub_list[FD_WS_MAX_SUBS];
   ulong sub_cnt;
   ulong last_subsc_id;
+  fd_epoch_bank_t * epoch_bank;
+  ulong epoch_bank_epoch;
 };
 typedef struct fd_rpc_global_ctx fd_rpc_global_ctx_t;
 
@@ -65,29 +67,61 @@ read_account_with_xid( fd_rpc_ctx_t * ctx, fd_pubkey_t * acct, fd_funk_txn_xid_t
   return fd_funk_rec_query_xid_safe(funk, &recid, xid, valloc, result_len);
 }
 
+/* LEAVES THE LOCK IN READ MODE */
 fd_epoch_bank_t *
 read_epoch_bank( fd_rpc_ctx_t * ctx, fd_valloc_t valloc ) {
+  fd_rpc_global_ctx_t * glob = ctx->global;
+  fd_readwrite_start_read( &glob->lock );
+
+  ulong smr = glob->blockstore->smr;
+  if( glob->epoch_bank != NULL &&
+      glob->epoch_bank_epoch == fd_slot_to_epoch(&glob->epoch_bank->epoch_schedule, smr, NULL) ) {
+    /* Leave lock held */
+    return glob->epoch_bank;
+  }
+
+  fd_readwrite_end_read( &glob->lock );
+  fd_readwrite_start_write( &glob->lock );
+
+  if( glob->epoch_bank != NULL ) {
+    fd_bincode_destroy_ctx_t binctx;
+    binctx.valloc = fd_libc_alloc_virtual();
+    fd_epoch_bank_destroy( glob->epoch_bank, &binctx );
+    free( glob->epoch_bank );
+    glob->epoch_bank = NULL;
+  }
+
   fd_funk_rec_key_t recid = fd_runtime_epoch_bank_key();
   ulong vallen;
   fd_funk_t * funk = ctx->global->funk;
   void * val = fd_funk_rec_query_safe(funk, &recid, valloc, &vallen);
   if( val == NULL ) {
     FD_LOG_WARNING(( "failed to decode epoch_bank" ));
+    fd_readwrite_end_write( &glob->lock );
     return NULL;
   }
-  fd_epoch_bank_t * epoch_bank = fd_valloc_malloc( valloc, fd_epoch_bank_align(), fd_epoch_bank_footprint() );
+  fd_epoch_bank_t * epoch_bank = malloc( fd_epoch_bank_footprint() );
   fd_epoch_bank_new( epoch_bank );
   fd_bincode_decode_ctx_t binctx;
   binctx.data = val;
   binctx.dataend = (uchar*)val + vallen;
-  binctx.valloc  = valloc;
+  binctx.valloc  = fd_libc_alloc_virtual();
   if( fd_epoch_bank_decode( epoch_bank, &binctx )!=FD_BINCODE_SUCCESS ) {
     FD_LOG_WARNING(( "failed to decode epoch_bank" ));
     fd_valloc_free( valloc, val );
+    free( epoch_bank );
+    fd_readwrite_end_write( &glob->lock );
     return NULL;
   }
   fd_valloc_free( valloc, val );
-  return epoch_bank;
+
+  glob->epoch_bank = epoch_bank;
+  glob->epoch_bank_epoch = fd_slot_to_epoch(&epoch_bank->epoch_schedule, smr, NULL);
+  fd_readwrite_end_write( &glob->lock );
+
+  fd_readwrite_start_read( &glob->lock );
+  /* Leave lock held */
+  return glob->epoch_bank;
 }
 
 fd_slot_bank_t *
@@ -628,7 +662,7 @@ method_getConfirmedTransaction(struct fd_web_replier* replier, struct json_value
 static int
 method_getEpochInfo(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void)values;
-  FD_METHOD_SCRATCH_BEGIN( 1<<29 ) { /* read_epoch consumes a ton of scratch space! */
+  FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
     fd_slot_bank_t * slot_bank = read_slot_bank(ctx, fd_scratch_virtual());
@@ -648,6 +682,7 @@ method_getEpochInfo(struct fd_web_replier* replier, struct json_values* values, 
                           slot_bank->transaction_count,
                           ctx->call_id);
     fd_web_replier_done(replier);
+    fd_readwrite_end_read( &ctx->global->lock );
   } FD_METHOD_SCRATCH_END;
   return 0;
 }
@@ -658,7 +693,7 @@ method_getEpochInfo(struct fd_web_replier* replier, struct json_values* values, 
 static int
 method_getEpochSchedule(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void)values;
-  FD_METHOD_SCRATCH_BEGIN( 1<<29 ) { /* read_epoch consumes a ton of scratch space! */
+  FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"firstNormalEpoch\":%lu,\"firstNormalSlot\":%lu,\"leaderScheduleSlotOffset\":%lu,\"slotsPerEpoch\":%lu,\"warmup\":%s},\"id\":%lu}" CRLF,
@@ -669,6 +704,7 @@ method_getEpochSchedule(struct fd_web_replier* replier, struct json_values* valu
     (epoch_bank->epoch_schedule.warmup ? "true" : "false"),
     ctx->call_id);
     fd_web_replier_done(replier);
+    fd_readwrite_end_read( &ctx->global->lock );
   } FD_METHOD_SCRATCH_END;
   return 0;
 }
@@ -724,13 +760,14 @@ method_getFirstAvailableBlock(struct fd_web_replier* replier, struct json_values
 static int
 method_getGenesisHash(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void)values;
-  FD_METHOD_SCRATCH_BEGIN( 1<<29 ) { /* read_epoch consumes a ton of scratch space! */
+  FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
     fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":\"");
     fd_textstream_encode_base58(ts, epoch_bank->genesis_hash.uc, sizeof(fd_pubkey_t));
     fd_textstream_sprintf(ts, "\",\"id\":%lu}" CRLF, ctx->call_id);
     fd_web_replier_done(replier);
+    fd_readwrite_end_read( &ctx->global->lock );
   } FD_METHOD_SCRATCH_END;
   return 0;
 }
@@ -875,7 +912,7 @@ method_getMaxShredInsertSlot(struct fd_web_replier* replier, struct json_values*
 
 static int
 method_getMinimumBalanceForRentExemption(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
-  FD_METHOD_SCRATCH_BEGIN( 1<<29 ) { /* read_epoch consumes a ton of scratch space! */
+  FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
     static const uint PATH_SIZE[3] = {
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_PARAMS,
       (JSON_TOKEN_LBRACKET<<16) | 0,
@@ -891,6 +928,7 @@ method_getMinimumBalanceForRentExemption(struct fd_web_replier* replier, struct 
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":%lu,\"id\":%lu}" CRLF,
                           min_balance, ctx->call_id);
     fd_web_replier_done(replier);
+    fd_readwrite_end_read( &ctx->global->lock );
   } FD_METHOD_SCRATCH_END;
   return 0;
 }
@@ -1332,7 +1370,7 @@ vote_account_to_json(fd_textstream_t * ts, fd_vote_accounts_pair_t_mapnode_t * v
 
 static int
 method_getVoteAccounts(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
-  FD_METHOD_SCRATCH_BEGIN( 1<<29 ) { /* read_epoch consumes a ton of scratch space! */
+  FD_METHOD_SCRATCH_BEGIN( 1<<27 ) { /* read_epoch consumes a ton of scratch space! */
     fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
     fd_vote_accounts_t * accts = &epoch_bank->stakes.vote_accounts;
     fd_vote_accounts_pair_t_mapnode_t * root = accts->vote_accounts_root;
@@ -1367,6 +1405,7 @@ method_getVoteAccounts(struct fd_web_replier* replier, struct json_values* value
 
     fd_textstream_sprintf(ts, "],\"delinquent\":[]},\"id\":%lu}" CRLF, ctx->call_id);
     fd_web_replier_done(replier);
+    fd_readwrite_end_read( &ctx->global->lock );
   } FD_METHOD_SCRATCH_END;
   return 0;
 }
