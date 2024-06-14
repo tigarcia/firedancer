@@ -350,3 +350,74 @@ int fd_block_to_json( fd_textstream_t * ts,
 
   return 0;
 }
+
+const char*
+fd_account_to_json( fd_textstream_t * ts,
+                    fd_pubkey_t acct,
+                    fd_rpc_encoding_t enc,
+                    uchar const * val,
+                    ulong val_sz,
+                    long off,
+                    long len ) {
+  fd_textstream_sprintf(ts, "{\"data\":[\"");
+
+  fd_account_meta_t * metadata = (fd_account_meta_t *)val;
+  if (val_sz < sizeof(fd_account_meta_t) && val_sz < metadata->hlen) {
+    return "failed to load account data";
+  }
+  val = (uchar*)val + metadata->hlen;
+  val_sz = val_sz - metadata->hlen;
+  if (val_sz > metadata->dlen)
+    val_sz = metadata->dlen;
+
+  if (len != FD_LONG_UNSET && off != FD_LONG_UNSET) {
+    if (enc == FD_ENC_JSON) {
+        return "cannot use jsonParsed encoding with slice";
+    }
+    if (off < 0 || (ulong)off >= val_sz) {
+      val = NULL;
+      val_sz = 0;
+    } else {
+      val = (uchar*)val + (ulong)off;
+      val_sz = val_sz - (ulong)off;
+    }
+    if (len < 0) {
+      val = NULL;
+      val_sz = 0;
+    } else if ((ulong)len < val_sz)
+      val_sz = (ulong)len;
+  }
+
+  const char* encstr;
+  switch (enc) {
+  case FD_ENC_BASE58:
+    if (fd_textstream_encode_base58(ts, val, val_sz)) {
+      return "failed to encode data in base58";
+    }
+    encstr = "base58";
+    break;
+  case FD_ENC_BASE64:
+    if (fd_textstream_encode_base64(ts, val, val_sz)) {
+      return "failed to encode data in base64";
+    }
+    encstr = "base64";
+    break;
+  default:
+    return "unsupported encoding";
+  }
+
+  char owner[50];
+  fd_base58_encode_32((uchar*)metadata->info.owner, 0, owner);
+  char addr[50];
+  fd_base58_encode_32(acct.uc, 0, addr);
+  fd_textstream_sprintf(ts, "\",\"%s\"],\"executable\":%s,\"lamports\":%lu,\"owner\":\"%s\",\"address\":\"%s\",\"rentEpoch\":%lu,\"space\":%lu}",
+                        encstr,
+                        (metadata->info.executable ? "true" : "false"),
+                        metadata->info.lamports,
+                        owner,
+                        addr,
+                        metadata->info.rent_epoch,
+                        val_sz);
+
+  return NULL;
+}

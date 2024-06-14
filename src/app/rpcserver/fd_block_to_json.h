@@ -24,3 +24,13 @@ int fd_block_to_json( fd_textstream_t * ts,
                       long maxvers,
                       enum fd_block_detail detail,
                       int rewards);
+
+#define FD_LONG_UNSET (1L << 63L)
+
+const char* fd_account_to_json( fd_textstream_t * ts,
+                                fd_pubkey_t acct,
+                                fd_rpc_encoding_t enc,
+                                uchar const * val,
+                                ulong val_sz,
+                                long off,
+                                long len );

@@ -16,8 +16,6 @@
 #define CRLF "\r\n"
 #define MATCH_STRING(_text_,_text_sz_,_str_) (_text_sz_ == sizeof(_str_)-1 && memcmp(_text_, _str_, sizeof(_str_)-1) == 0)
 
-#define FD_LONG_UNSET (1L << 63L)
-
 struct fd_ws_subscription {
   fd_websocket_ctx_t * socket;
   long meth_id;
@@ -199,16 +197,6 @@ method_getAccountInfo(struct fd_web_replier* replier, struct json_values* values
       return 0;
     }
 
-    fd_account_meta_t * metadata = (fd_account_meta_t *)val;
-    if (val_sz < metadata->hlen) {
-      fd_web_replier_error(replier, "failed to load account data for %s", (const char*)arg);
-      return 0;
-    }
-    val = (char*)val + metadata->hlen;
-    val_sz = val_sz - metadata->hlen;
-    if (val_sz > metadata->dlen)
-      val_sz = metadata->dlen;
-
     static const uint PATH2[4] = {
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_PARAMS,
       (JSON_TOKEN_LBRACKET<<16) | 1,
@@ -247,59 +235,18 @@ method_getAccountInfo(struct fd_web_replier* replier, struct json_values* values
     const void* len_ptr = json_get_value(values, PATH3, 4, &len_sz);
     ulong off_sz = 0;
     const void* off_ptr = json_get_value(values, PATH4, 4, &off_sz);
-    if (len_ptr && off_ptr) {
-      if (enc == FD_ENC_JSON) {
-        fd_web_replier_error(replier, "cannot use jsonParsed encoding with slice");
-        return 0;
-      }
-      long len = *(long*)len_ptr;
-      long off = *(long*)off_ptr;
-      if (off < 0 || (ulong)off >= val_sz) {
-        val = NULL;
-        val_sz = 0;
-      } else {
-        val = (char*)val + (ulong)off;
-        val_sz = val_sz - (ulong)off;
-      }
-      if (len < 0) {
-        val = NULL;
-        val_sz = 0;
-      } else if ((ulong)len < val_sz)
-        val_sz = (ulong)len;
-    }
+    long off = (off_ptr ? *(long *)off_ptr : FD_LONG_UNSET);
+    long len = (len_ptr ? *(long *)len_ptr : FD_LONG_UNSET);
 
-    fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":{\"data\":[\"",
+    fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":",
                           blockstore->smr);
-
-    if (val_sz) {
-      switch (enc) {
-      case FD_ENC_BASE58:
-        if (fd_textstream_encode_base58(ts, val, val_sz)) {
-          fd_web_replier_error(replier, "failed to encode data in base58");
-          return 0;
-        }
-        break;
-      case FD_ENC_BASE64:
-        if (fd_textstream_encode_base64(ts, val, val_sz)) {
-          fd_web_replier_error(replier, "failed to encode data in base64");
-          return 0;
-        }
-        break;
-      default:
-        break;
-      }
+    const char * err = fd_account_to_json( ts, acct, enc, val, val_sz, off, len );
+    if( err ) {
+      fd_web_replier_error(replier, "%s", err);
+      return 0;
     }
+    fd_textstream_sprintf(ts, "}},\"id\":%lu}" CRLF, ctx->call_id);
 
-    char owner[50];
-    fd_base58_encode_32((uchar*)metadata->info.owner, 0, owner);
-    fd_textstream_sprintf(ts, "\",\"%s\"],\"executable\":%s,\"lamports\":%lu,\"owner\":\"%s\",\"rentEpoch\":%lu,\"space\":%lu}},\"id\":%lu}" CRLF,
-                          (const char*)enc_str,
-                          (metadata->info.executable ? "true" : "false"),
-                          metadata->info.lamports,
-                          owner,
-                          metadata->info.rent_epoch,
-                          val_sz,
-                          ctx->call_id);
     fd_web_replier_done(replier);
 
   } FD_METHOD_SCRATCH_END;
@@ -1877,71 +1824,14 @@ ws_method_accountSubscribe_update(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * ms
       return 1;
     }
 
-    fd_account_meta_t * metadata = (fd_account_meta_t *)val;
-    if (val_sz < metadata->hlen) {
-      fd_web_ws_error(wsctx, "failed to load account data");
+    fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"method\":\"accountNotification\",\"params\":{\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":",
+                          msg->acct_saved.funk_xid.ul[0]);
+    const char * err = fd_account_to_json( ts, sub->acct_subscribe.acct, sub->acct_subscribe.enc, val, val_sz, sub->acct_subscribe.off, sub->acct_subscribe.len );
+    if( err ) {
+      fd_web_ws_error(wsctx, "%s", err);
       return 0;
     }
-    val = (char*)val + metadata->hlen;
-    val_sz = val_sz - metadata->hlen;
-    if (val_sz > metadata->dlen)
-      val_sz = metadata->dlen;
-
-    if (sub->acct_subscribe.len != FD_LONG_UNSET && sub->acct_subscribe.off != FD_LONG_UNSET) {
-      if (sub->acct_subscribe.enc == FD_ENC_JSON) {
-        fd_web_ws_error(wsctx, "cannot use jsonParsed encoding with slice");
-        return 0;
-      }
-      long len = sub->acct_subscribe.len;
-      long off = sub->acct_subscribe.off;
-      if (off < 0 || (ulong)off >= val_sz) {
-        val = NULL;
-        val_sz = 0;
-      } else {
-        val = (char*)val + (ulong)off;
-        val_sz = val_sz - (ulong)off;
-      }
-      if (len < 0) {
-        val = NULL;
-        val_sz = 0;
-      } else if ((ulong)len < val_sz)
-        val_sz = (ulong)len;
-    }
-
-    fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"method\":\"accountNotification\",\"params\":{\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":{\"data\":[\"",
-                          msg->acct_saved.funk_xid.ul[0]);
-
-    if (val_sz) {
-      switch (sub->acct_subscribe.enc) {
-      case FD_ENC_BASE58:
-        if (fd_textstream_encode_base58(ts, val, val_sz)) {
-          fd_web_ws_error(wsctx, "failed to encode data in base58");
-          return 0;
-        }
-        break;
-      case FD_ENC_BASE64:
-        if (fd_textstream_encode_base64(ts, val, val_sz)) {
-          fd_web_ws_error(wsctx, "failed to encode data in base64");
-          return 0;
-        }
-        break;
-      default:
-        break;
-      }
-    }
-
-    char owner[50];
-    fd_base58_encode_32((uchar*)metadata->info.owner, 0, owner);
-    char addr[50];
-    fd_base58_encode_32(sub->acct_subscribe.acct.uc, 0, addr);
-    fd_textstream_sprintf(ts, "\"],\"executable\":%s,\"lamports\":%lu,\"owner\":\"%s\",\"address\":\"%s\",\"rentEpoch\":%lu,\"space\":%lu}},\"subscription\":%lu}}" CRLF,
-                          (metadata->info.executable ? "true" : "false"),
-                          metadata->info.lamports,
-                          owner,
-                          addr,
-                          metadata->info.rent_epoch,
-                          val_sz,
-                          sub->subsc_id);
+    fd_textstream_sprintf(ts, "\"},\"subscription\":%lu}}" CRLF, sub->subsc_id);
   } FD_METHOD_SCRATCH_END;
 
   return 1;
