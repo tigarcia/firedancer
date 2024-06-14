@@ -35,60 +35,42 @@ struct fd_ws_subscription {
 
 #define FD_WS_MAX_SUBS 1024
 
-struct fd_ws_sub_list {
-  struct fd_ws_subscription list[FD_WS_MAX_SUBS];
-  ulong cnt;
+struct fd_rpc_global_ctx {
+  fd_readwrite_lock_t lock;
+  fd_webserver_t ws;
+  fd_funk_t * funk;
+  fd_blockstore_t * blockstore;
+  struct fd_ws_subscription sub_list[FD_WS_MAX_SUBS];
+  ulong sub_cnt;
   ulong last_subsc_id;
-  volatile ulong write_lock; /* Incremented at the start of a write operation, and again at the end */
 };
-
-static void fd_ws_subs_lock( struct fd_ws_sub_list * subs ) {
-  register ulong oldval;
-  for(;;) {
-    oldval = subs->write_lock;
-    if( FD_LIKELY( FD_ATOMIC_CAS( &subs->write_lock, oldval, oldval+1U) == oldval ) ) break;
-    FD_SPIN_PAUSE();
-  }
-  if( FD_UNLIKELY(oldval&1UL) ) FD_LOG_CRIT(( "attempt to lock subscriptions when it is already locked" ));
-  FD_COMPILER_MFENCE();
-}
-
-static void fd_ws_subs_unlock( struct fd_ws_sub_list * subs ) {
-  FD_COMPILER_MFENCE();
-  register ulong oldval;
-  for(;;) {
-    oldval = subs->write_lock;
-    if( FD_LIKELY( FD_ATOMIC_CAS( &subs->write_lock, oldval, oldval+1U) == oldval ) ) break;
-    FD_SPIN_PAUSE();
-  }
-  if( FD_UNLIKELY(!(oldval&1UL)) ) FD_LOG_CRIT(( "attempt to unlock subscriptions when it is already unlocked" ));
-}
+typedef struct fd_rpc_global_ctx fd_rpc_global_ctx_t;
 
 struct fd_rpc_ctx {
-    fd_webserver_t ws;
-    fd_funk_t * funk;
-    fd_blockstore_t * blockstore;
-    long call_id;
-    struct fd_ws_sub_list * subs;
+  long call_id;
+  fd_rpc_global_ctx_t * global;
 };
 
 static void *
 read_account( fd_rpc_ctx_t * ctx, fd_pubkey_t * acct, fd_valloc_t valloc, ulong * result_len ) {
   fd_funk_rec_key_t recid = fd_acc_funk_key(acct);
-  return fd_funk_rec_query_safe(ctx->funk, &recid, valloc, result_len);
+  fd_funk_t * funk = ctx->global->funk;
+  return fd_funk_rec_query_safe(funk, &recid, valloc, result_len);
 }
 
 static void *
 read_account_with_xid( fd_rpc_ctx_t * ctx, fd_pubkey_t * acct, fd_funk_txn_xid_t * xid, fd_valloc_t valloc, ulong * result_len ) {
   fd_funk_rec_key_t recid = fd_acc_funk_key(acct);
-  return fd_funk_rec_query_xid_safe(ctx->funk, &recid, xid, valloc, result_len);
+  fd_funk_t * funk = ctx->global->funk;
+  return fd_funk_rec_query_xid_safe(funk, &recid, xid, valloc, result_len);
 }
 
 fd_epoch_bank_t *
 read_epoch_bank( fd_rpc_ctx_t * ctx, fd_valloc_t valloc ) {
   fd_funk_rec_key_t recid = fd_runtime_epoch_bank_key();
   ulong vallen;
-  void * val = fd_funk_rec_query_safe(ctx->funk, &recid, valloc, &vallen);
+  fd_funk_t * funk = ctx->global->funk;
+  void * val = fd_funk_rec_query_safe(funk, &recid, valloc, &vallen);
   if( val == NULL ) {
     FD_LOG_WARNING(( "failed to decode epoch_bank" ));
     return NULL;
@@ -112,7 +94,8 @@ fd_slot_bank_t *
 read_slot_bank( fd_rpc_ctx_t * ctx, fd_valloc_t valloc ) {
   fd_funk_rec_key_t recid = fd_runtime_slot_bank_key();
   ulong vallen;
-  void * val = fd_funk_rec_query_safe(ctx->funk, &recid, valloc, &vallen);
+  fd_funk_t * funk = ctx->global->funk;
+  void * val = fd_funk_rec_query_safe(funk, &recid, valloc, &vallen);
   if( val == NULL ) {
     FD_LOG_WARNING(( "failed to decode slot_bank" ));
     return NULL;
@@ -175,9 +158,10 @@ method_getAccountInfo(struct fd_web_replier* replier, struct json_values* values
     fd_base58_decode_32((const char *)arg, acct.uc);
     ulong val_sz;
     void * val = read_account(ctx, &acct, fd_scratch_virtual(), &val_sz);
+    fd_blockstore_t * blockstore = ctx->global->blockstore;
     if (val == NULL) {
       fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":null},\"id\":%lu}" CRLF,
-                            ctx->blockstore->smr, ctx->call_id);
+                            blockstore->smr, ctx->call_id);
       fd_web_replier_done(replier);
       return 0;
     }
@@ -252,7 +236,7 @@ method_getAccountInfo(struct fd_web_replier* replier, struct json_values* values
     }
 
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":{\"data\":[\"",
-                          ctx->blockstore->smr);
+                          blockstore->smr);
 
     if (val_sz) {
       switch (enc) {
@@ -318,8 +302,9 @@ method_getBalance(struct fd_web_replier* replier, struct json_values* values, fd
     }
     fd_account_meta_t * metadata = (fd_account_meta_t *)val;
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
+    fd_blockstore_t * blockstore = ctx->global->blockstore;
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":%lu},\"id\":%lu}" CRLF,
-                          ctx->blockstore->smr, metadata->info.lamports, ctx->call_id);
+                          blockstore->smr, metadata->info.lamports, ctx->call_id);
     fd_web_replier_done(replier);
   } FD_METHOD_SCRATCH_END;
   return 0;
@@ -409,7 +394,8 @@ method_getBlock(struct fd_web_replier* replier, struct json_values* values, fd_r
   fd_block_t blk[1];
   fd_slot_meta_t slot_meta[1];
   ulong blk_sz;
-  uchar * blk_data = fd_blockstore_block_query_volatile( ctx->blockstore, slotn, fd_libc_alloc_virtual(), blk, slot_meta, &blk_sz );
+  fd_blockstore_t * blockstore = ctx->global->blockstore;
+  uchar * blk_data = fd_blockstore_block_query_volatile( blockstore, slotn, fd_libc_alloc_virtual(), blk, slot_meta, &blk_sz );
   if( blk_data == NULL ) {
     fd_web_replier_error(replier, "failed to display block for slot %lu", slotn);
     return 0;
@@ -452,7 +438,8 @@ method_getBlockHeight(struct fd_web_replier* replier, struct json_values* values
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
   fd_block_t blk[1];
   fd_slot_meta_t slot_meta[1];
-  int ret = fd_blockstore_slot_meta_query_volatile(ctx->blockstore, ctx->blockstore->smr, blk, slot_meta);
+  fd_blockstore_t * blockstore = ctx->global->blockstore;
+  int ret = fd_blockstore_slot_meta_query_volatile(blockstore, blockstore->smr, blk, slot_meta);
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":%lu,\"id\":%lu}" CRLF,
                         (!ret ? blk->height : 0UL), ctx->call_id);
   fd_web_replier_done(replier);
@@ -494,10 +481,11 @@ method_getBlocks(struct fd_web_replier* replier, struct json_values* values, fd_
   const void* endslot = json_get_value(values, PATH_ENDSLOT, 3, &endslot_sz);
   ulong endslotn = (endslot == NULL ? ULONG_MAX : (ulong)(*(long*)endslot));
 
-  if (startslotn < ctx->blockstore->min)
-    startslotn = ctx->blockstore->min;
-  if (endslotn > ctx->blockstore->max)
-    endslotn = ctx->blockstore->max;
+  fd_blockstore_t * blockstore = ctx->global->blockstore;
+  if (startslotn < blockstore->min)
+    startslotn = blockstore->min;
+  if (endslotn > blockstore->max)
+    endslotn = blockstore->max;
 
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":[");
@@ -505,7 +493,7 @@ method_getBlocks(struct fd_web_replier* replier, struct json_values* values, fd_
   for ( ulong i = startslotn; i <= endslotn && cnt < 500000U; ++i ) {
     fd_block_t blk[1];
     fd_slot_meta_t slot_meta[1];
-    int ret = fd_blockstore_slot_meta_query_volatile(ctx->blockstore, i, blk, slot_meta);
+    int ret = fd_blockstore_slot_meta_query_volatile(blockstore, i, blk, slot_meta);
     if (!ret) {
       fd_textstream_sprintf(ts, "%s%lu", (cnt==0 ? "" : ","), i);
       ++cnt;
@@ -547,18 +535,19 @@ method_getBlocksWithLimit(struct fd_web_replier* replier, struct json_values* va
   }
   ulong limitn = (ulong)(*(long*)limit);
 
-  if (startslotn < ctx->blockstore->min)
-    startslotn = ctx->blockstore->min;
+  fd_blockstore_t * blockstore = ctx->global->blockstore;
+  if (startslotn < blockstore->min)
+    startslotn = blockstore->min;
   if (limitn > 500000)
     limitn = 500000;
 
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":[");
   uint cnt = 0;
-  for ( ulong i = startslotn; i <= ctx->blockstore->max && cnt < limitn; ++i ) {
+  for ( ulong i = startslotn; i <= blockstore->max && cnt < limitn; ++i ) {
     fd_block_t blk[1];
     fd_slot_meta_t slot_meta[1];
-    int ret = fd_blockstore_slot_meta_query_volatile(ctx->blockstore, i, blk, slot_meta);
+    int ret = fd_blockstore_slot_meta_query_volatile(blockstore, i, blk, slot_meta);
     if (!ret) {
       fd_textstream_sprintf(ts, "%s%lu", (cnt==0 ? "" : ","), i);
       ++cnt;
@@ -643,14 +632,15 @@ method_getEpochInfo(struct fd_web_replier* replier, struct json_values* values, 
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual());
     fd_slot_bank_t * slot_bank = read_slot_bank(ctx, fd_scratch_virtual());
+    fd_blockstore_t * blockstore = ctx->global->blockstore;
     ulong slot_idx = 0;
-    ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, ctx->blockstore->smr, &slot_idx );
+    ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, blockstore->smr, &slot_idx );
     ulong slots_per_epoch = fd_epoch_slot_cnt( &epoch_bank->epoch_schedule, epoch );
     fd_block_t blk[1];
     fd_slot_meta_t slot_meta[1];
-    int ret = fd_blockstore_slot_meta_query_volatile(ctx->blockstore, ctx->blockstore->smr, blk, slot_meta);
+    int ret = fd_blockstore_slot_meta_query_volatile(blockstore, blockstore->smr, blk, slot_meta);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"absoluteSlot\":%lu,\"blockHeight\":%lu,\"epoch\":%lu,\"slotIndex\":%lu,\"slotsInEpoch\":%lu,\"transactionCount\":%lu},\"id\":%lu}" CRLF,
-                          ctx->blockstore->smr,
+                          blockstore->smr,
                           (!ret ? blk->height : 0UL),
                           epoch,
                           slot_idx,
@@ -933,9 +923,10 @@ method_getMultipleAccounts(struct fd_web_replier* replier, struct json_values* v
       return 0;
     }
 
+    fd_blockstore_t * blockstore = ctx->global->blockstore;
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":[",
-                          ctx->blockstore->smr);
+                          blockstore->smr);
 
     // Iterate through account ids
     for ( ulong i = 0; ; ++i ) {
@@ -1065,8 +1056,9 @@ method_getSignaturesForAddress(struct fd_web_replier* replier, struct json_value
 static int
 method_getSignatureStatuses(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
+  fd_blockstore_t * blockstore = ctx->global->blockstore;
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"value\":[",
-                        ctx->blockstore->smr);
+                        blockstore->smr);
 
   // Iterate through account ids
   for ( ulong i = 0; ; ++i ) {
@@ -1091,7 +1083,7 @@ method_getSignatureStatuses(struct fd_web_replier* replier, struct json_values* 
       continue;
     }
     fd_blockstore_txn_map_t elem;
-    if( fd_blockstore_txn_query_volatile( ctx->blockstore, key, &elem, NULL, NULL ) ) {
+    if( fd_blockstore_txn_query_volatile( blockstore, key, &elem, NULL, NULL ) ) {
       fd_textstream_sprintf(ts, "null");
       continue;
     }
@@ -1113,8 +1105,9 @@ static int
 method_getSlot(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void) values;
   fd_textstream_t * ts = fd_web_replier_textstream(replier);
+  fd_blockstore_t * blockstore = ctx->global->blockstore;
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":%lu,\"id\":%lu}" CRLF,
-                        ctx->blockstore->smr, ctx->call_id);
+                        blockstore->smr, ctx->call_id);
   fd_web_replier_done(replier);
   return 0;
 }
@@ -1279,7 +1272,8 @@ method_getTransaction(struct fd_web_replier* replier, struct json_values* values
   fd_blockstore_txn_map_t elem;
   long blk_ts;
   uchar txn_data_raw[FD_TXN_MTU];
-  if( fd_blockstore_txn_query_volatile( ctx->blockstore, key, &elem, &blk_ts, txn_data_raw ) ) {
+  fd_blockstore_t * blockstore = ctx->global->blockstore;
+  if( fd_blockstore_txn_query_volatile( blockstore, key, &elem, &blk_ts, txn_data_raw ) ) {
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":null,\"id\":%lu}" CRLF, ctx->call_id);
     fd_web_replier_done(replier);
     return 0;
@@ -1292,7 +1286,7 @@ method_getTransaction(struct fd_web_replier* replier, struct json_values* values
     FD_LOG_ERR(("failed to parse transaction"));
 
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"blockTime\":%ld,\"slot\":%lu,",
-                        ctx->blockstore->smr, blk_ts/(long)1e9, elem.slot);
+                        blockstore->smr, blk_ts/(long)1e9, elem.slot);
   fd_txn_to_json( ts, (fd_txn_t *)txn_out, txn_data_raw, NULL, 0, enc, 0, FD_BLOCK_DETAIL_FULL, 0 );
   fd_textstream_sprintf(ts, "},\"id\":%lu}" CRLF, ctx->call_id);
 
@@ -1801,22 +1795,23 @@ ws_method_accountSubscribe(fd_websocket_ctx_t * wsctx, struct json_values * valu
       }
     }
 
-    fd_ws_subs_lock( ctx->subs );
-    if( ctx->subs->cnt >= FD_WS_MAX_SUBS ) {
-      fd_ws_subs_unlock( ctx->subs );
+    fd_rpc_global_ctx_t * subs = ctx->global;
+    fd_readwrite_start_write( &subs->lock );
+    if( subs->sub_cnt >= FD_WS_MAX_SUBS ) {
+      fd_readwrite_end_write( &subs->lock );
       fd_web_ws_error(wsctx, "too many subscriptions");
       return 0;
     }
-    struct fd_ws_subscription * sub = &ctx->subs->list[ ctx->subs->cnt++ ];
+    struct fd_ws_subscription * sub = &subs->sub_list[ subs->sub_cnt++ ];
     sub->socket = wsctx;
     sub->meth_id = KEYW_WS_METHOD_ACCOUNTSUBSCRIBE;
     sub->call_id = ctx->call_id;
-    ulong subid = sub->subsc_id = ++(ctx->subs->last_subsc_id);
+    ulong subid = sub->subsc_id = ++(subs->last_subsc_id);
     sub->acct_subscribe.acct = acct;
     sub->acct_subscribe.enc = enc;
     sub->acct_subscribe.off = (off_ptr ? *(long*)off_ptr : FD_LONG_UNSET);
     sub->acct_subscribe.len = (len_ptr ? *(long*)len_ptr : FD_LONG_UNSET);
-    fd_ws_subs_unlock( ctx->subs );
+    fd_readwrite_end_write( &subs->lock );
 
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":%lu,\"id\":%lu}" CRLF,
                           subid, sub->call_id);
@@ -1912,18 +1907,19 @@ ws_method_accountSubscribe_update(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * ms
 static int
 ws_method_slotSubscribe(fd_websocket_ctx_t * wsctx, struct json_values * values, fd_rpc_ctx_t * ctx, fd_textstream_t * ts) {
   (void)values;
-  fd_ws_subs_lock( ctx->subs );
-  if( ctx->subs->cnt >= FD_WS_MAX_SUBS ) {
-    fd_ws_subs_unlock( ctx->subs );
+  fd_rpc_global_ctx_t * subs = ctx->global;
+  fd_readwrite_start_write( &subs->lock );
+  if( subs->sub_cnt >= FD_WS_MAX_SUBS ) {
+    fd_readwrite_end_write( &subs->lock );
     fd_web_ws_error(wsctx, "too many subscriptions");
     return 0;
   }
-  struct fd_ws_subscription * sub = &ctx->subs->list[ ctx->subs->cnt++ ];
+  struct fd_ws_subscription * sub = &subs->sub_list[ subs->sub_cnt++ ];
   sub->socket = wsctx;
   sub->meth_id = KEYW_WS_METHOD_SLOTSUBSCRIBE;
   sub->call_id = ctx->call_id;
-  ulong subid = sub->subsc_id = ++(ctx->subs->last_subsc_id);
-  fd_ws_subs_unlock( ctx->subs );
+  ulong subid = sub->subsc_id = ++(subs->last_subsc_id);
+  fd_readwrite_end_write( &subs->lock );
 
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":%lu,\"id\":%lu}" CRLF,
                         subid, sub->call_id);
@@ -2012,54 +2008,57 @@ fd_webserver_ws_subscribe(struct json_values* values, fd_websocket_ctx_t * wsctx
 
 void
 fd_rpc_start_service(fd_rpcserver_args_t * args, fd_rpc_ctx_t ** ctx_p) {
-  fd_rpc_ctx_t * ctx = (fd_rpc_ctx_t *)malloc(sizeof(fd_rpc_ctx_t));
-  *ctx_p = ctx;
-  ctx->funk = args->funk;
-  ctx->blockstore = args->blockstore;
-  struct fd_ws_sub_list * subs = (struct fd_ws_sub_list *)malloc(sizeof(struct fd_ws_sub_list));
-  subs->cnt = 0;
-  subs->last_subsc_id = 0;
-  subs->write_lock = 0;
-  ctx->subs = subs;
+  fd_rpc_ctx_t * ctx         = (fd_rpc_ctx_t *)malloc(sizeof(fd_rpc_ctx_t));
+  fd_rpc_global_ctx_t * gctx = (fd_rpc_global_ctx_t *)malloc(sizeof(fd_rpc_global_ctx_t));
+  fd_memset(ctx, 0, sizeof(fd_rpc_ctx_t));
+  fd_memset(gctx, 0, sizeof(fd_rpc_global_ctx_t));
+
+  fd_readwrite_new( &gctx->lock );
+  ctx->global = gctx;
+  gctx->funk = args->funk;
+  gctx->blockstore = args->blockstore;
+
   FD_LOG_NOTICE(( "starting web server with %lu threads on port %u", args->num_threads, (uint)args->port ));
-  if (fd_webserver_start(args->num_threads, args->port, args->ws_port, &ctx->ws, ctx))
+  if (fd_webserver_start(args->num_threads, args->port, args->ws_port, &gctx->ws, ctx))
     FD_LOG_ERR(("fd_webserver_start failed"));
+
+  *ctx_p = ctx;
 }
 
 void
 fd_rpc_stop_service(fd_rpc_ctx_t * ctx) {
   FD_LOG_NOTICE(( "stopping web server" ));
-  if (fd_webserver_stop(&ctx->ws))
+  if (fd_webserver_stop(&ctx->global->ws))
     FD_LOG_ERR(("fd_webserver_stop failed"));
-  free(ctx->subs);
+  free(ctx->global);
   free(ctx);
 }
 
 void
 fd_rpc_ws_poll(fd_rpc_ctx_t * ctx) {
-  fd_webserver_ws_poll(&ctx->ws);
+  fd_webserver_ws_poll(&ctx->global->ws);
 }
 
 void
 fd_webserver_ws_closed(fd_websocket_ctx_t * wsctx, void * cb_arg) {
   fd_rpc_ctx_t * ctx = ( fd_rpc_ctx_t *)cb_arg;
-  struct fd_ws_sub_list * subs = ctx->subs;
-  fd_ws_subs_lock( subs );
-  for( ulong i = 0; i < subs->cnt; ++i ) {
-    if( subs->list[i].socket == wsctx ) {
-      fd_memcpy( &subs->list[i], &subs->list[--(subs->cnt)], sizeof(struct fd_ws_subscription) );
+  fd_rpc_global_ctx_t * subs = ctx->global;
+  fd_readwrite_start_write( &subs->lock );
+  for( ulong i = 0; i < subs->sub_cnt; ++i ) {
+    if( subs->sub_list[i].socket == wsctx ) {
+      fd_memcpy( &subs->sub_list[i], &subs->sub_list[--(subs->sub_cnt)], sizeof(struct fd_ws_subscription) );
       --i;
     }
   }
-  fd_ws_subs_unlock( subs );
+  fd_readwrite_end_write( &subs->lock );
 }
 
 void
 fd_rpc_replay_notify(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * msg) {
-  struct fd_ws_sub_list * subs = ctx->subs;
-  fd_ws_subs_lock( subs );
+  fd_rpc_global_ctx_t * subs = ctx->global;
+  fd_readwrite_start_read( &subs->lock );
 
-  if( subs->cnt == 0 ) {
+  if( subs->sub_cnt == 0 ) {
     /* do nothing */
 
   } else if( msg->type == FD_REPLAY_SAVED_TYPE ) {
@@ -2069,8 +2068,8 @@ fd_rpc_replay_notify(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * msg) {
     /* TODO: replace with a hash table lookup? */
     for( uint i = 0; i < msg->acct_saved.acct_id_cnt; ++i ) {
       fd_pubkey_t * id = &msg->acct_saved.acct_id[i];
-      for( ulong j = 0; j < subs->cnt; ++j ) {
-        struct fd_ws_subscription * sub = &ctx->subs->list[ j ];
+      for( ulong j = 0; j < subs->sub_cnt; ++j ) {
+        struct fd_ws_subscription * sub = &subs->sub_list[ j ];
         if( sub->meth_id == KEYW_WS_METHOD_ACCOUNTSUBSCRIBE &&
             fd_pubkey_eq( id, &sub->acct_subscribe.acct ) ) {
           fd_textstream_clear( &ts );
@@ -2086,8 +2085,8 @@ fd_rpc_replay_notify(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * msg) {
     fd_textstream_t ts;
     fd_textstream_new(&ts, fd_libc_alloc_virtual(), 1UL<<16);
 
-    for( ulong j = 0; j < subs->cnt; ++j ) {
-      struct fd_ws_subscription * sub = &ctx->subs->list[ j ];
+    for( ulong j = 0; j < subs->sub_cnt; ++j ) {
+      struct fd_ws_subscription * sub = &subs->sub_list[ j ];
       if( sub->meth_id == KEYW_WS_METHOD_SLOTSUBSCRIBE ) {
         fd_textstream_clear( &ts );
         if( ws_method_slotSubscribe_update( ctx, msg, sub, &ts ) )
@@ -2098,5 +2097,5 @@ fd_rpc_replay_notify(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * msg) {
     fd_textstream_destroy(&ts);
   }
 
-  fd_ws_subs_unlock( subs );
+  fd_readwrite_end_read( &subs->lock );
 }
