@@ -245,12 +245,6 @@ fd_runtime_save_epoch_bank( fd_exec_slot_ctx_t * slot_ctx );
 void
 fd_features_restore( fd_exec_slot_ctx_t * slot_ctx );
 
-static inline ulong
-fd_rent_exempt( fd_rent_t const * rent,
-                ulong             sz ) {
-  return (sz + 128) * ((ulong) ((double)rent->lamports_per_uint8_year * rent->exemption_threshold));
-}
-
 void
 fd_process_new_epoch( fd_exec_slot_ctx_t * slot_ctx,
                       ulong parent_epoch );
