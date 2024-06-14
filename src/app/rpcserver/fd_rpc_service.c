@@ -69,58 +69,58 @@ read_account_with_xid( fd_rpc_ctx_t * ctx, fd_pubkey_t * acct, fd_funk_txn_xid_t
 
 /* LEAVES THE LOCK IN READ MODE */
 fd_epoch_bank_t *
-read_epoch_bank( fd_rpc_ctx_t * ctx, fd_valloc_t valloc, ulong smr ) {
+read_epoch_bank( fd_rpc_ctx_t * ctx, fd_valloc_t valloc, ulong * smr ) {
   fd_rpc_global_ctx_t * glob = ctx->global;
-  fd_readwrite_start_read( &glob->lock );
 
-  if( glob->epoch_bank != NULL &&
-      glob->epoch_bank_epoch == fd_slot_to_epoch(&glob->epoch_bank->epoch_schedule, smr, NULL) ) {
-    /* Leave lock held */
-    return glob->epoch_bank;
-  }
+  for(;;) {
+    fd_readwrite_start_read( &glob->lock );
+    *smr = glob->blockstore->smr;
 
-  fd_readwrite_end_read( &glob->lock );
-  fd_readwrite_start_write( &glob->lock );
+    if( glob->epoch_bank != NULL &&
+        glob->epoch_bank_epoch == fd_slot_to_epoch(&glob->epoch_bank->epoch_schedule, *smr, NULL) ) {
+      /* Leave lock held */
+      return glob->epoch_bank;
+    }
 
-  if( glob->epoch_bank != NULL ) {
-    fd_bincode_destroy_ctx_t binctx;
-    binctx.valloc = fd_libc_alloc_virtual();
-    fd_epoch_bank_destroy( glob->epoch_bank, &binctx );
-    free( glob->epoch_bank );
-    glob->epoch_bank = NULL;
-  }
+    fd_readwrite_end_read( &glob->lock );
+    fd_readwrite_start_write( &glob->lock );
 
-  fd_funk_rec_key_t recid = fd_runtime_epoch_bank_key();
-  ulong vallen;
-  fd_funk_t * funk = ctx->global->funk;
-  void * val = fd_funk_rec_query_safe(funk, &recid, valloc, &vallen);
-  if( val == NULL ) {
-    FD_LOG_WARNING(( "failed to decode epoch_bank" ));
-    fd_readwrite_end_write( &glob->lock );
-    return NULL;
-  }
-  fd_epoch_bank_t * epoch_bank = malloc( fd_epoch_bank_footprint() );
-  fd_epoch_bank_new( epoch_bank );
-  fd_bincode_decode_ctx_t binctx;
-  binctx.data = val;
-  binctx.dataend = (uchar*)val + vallen;
-  binctx.valloc  = fd_libc_alloc_virtual();
-  if( fd_epoch_bank_decode( epoch_bank, &binctx )!=FD_BINCODE_SUCCESS ) {
-    FD_LOG_WARNING(( "failed to decode epoch_bank" ));
+    if( glob->epoch_bank != NULL ) {
+      fd_bincode_destroy_ctx_t binctx;
+      binctx.valloc = fd_libc_alloc_virtual();
+      fd_epoch_bank_destroy( glob->epoch_bank, &binctx );
+      free( glob->epoch_bank );
+      glob->epoch_bank = NULL;
+    }
+
+    fd_funk_rec_key_t recid = fd_runtime_epoch_bank_key();
+    ulong vallen;
+    fd_funk_t * funk = ctx->global->funk;
+    void * val = fd_funk_rec_query_safe(funk, &recid, valloc, &vallen);
+    if( val == NULL ) {
+      FD_LOG_WARNING(( "failed to decode epoch_bank" ));
+      fd_readwrite_end_write( &glob->lock );
+      return NULL;
+    }
+    fd_epoch_bank_t * epoch_bank = malloc( fd_epoch_bank_footprint() );
+    fd_epoch_bank_new( epoch_bank );
+    fd_bincode_decode_ctx_t binctx;
+    binctx.data = val;
+    binctx.dataend = (uchar*)val + vallen;
+    binctx.valloc  = fd_libc_alloc_virtual();
+    if( fd_epoch_bank_decode( epoch_bank, &binctx )!=FD_BINCODE_SUCCESS ) {
+      FD_LOG_WARNING(( "failed to decode epoch_bank" ));
+      fd_valloc_free( valloc, val );
+      free( epoch_bank );
+      fd_readwrite_end_write( &glob->lock );
+      return NULL;
+    }
     fd_valloc_free( valloc, val );
-    free( epoch_bank );
+
+    glob->epoch_bank = epoch_bank;
+    glob->epoch_bank_epoch = fd_slot_to_epoch(&epoch_bank->epoch_schedule, *smr, NULL);
     fd_readwrite_end_write( &glob->lock );
-    return NULL;
   }
-  fd_valloc_free( valloc, val );
-
-  glob->epoch_bank = epoch_bank;
-  glob->epoch_bank_epoch = fd_slot_to_epoch(&epoch_bank->epoch_schedule, smr, NULL);
-  fd_readwrite_end_write( &glob->lock );
-
-  fd_readwrite_start_read( &glob->lock );
-  /* Leave lock held */
-  return glob->epoch_bank;
 }
 
 fd_slot_bank_t *
@@ -664,8 +664,8 @@ method_getEpochInfo(struct fd_web_replier* replier, struct json_values* values, 
   FD_METHOD_SCRATCH_BEGIN( 1<<28 ) { /* read_epoch consumes a ton of scratch space! */
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_blockstore_t * blockstore = ctx->global->blockstore;
-    ulong smr = blockstore->smr;
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
+    ulong smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), &smr);
     fd_slot_bank_t * slot_bank = read_slot_bank(ctx, fd_scratch_virtual());
     ulong slot_idx = 0;
     ulong epoch = fd_slot_to_epoch( &epoch_bank->epoch_schedule, smr, &slot_idx );
@@ -695,8 +695,8 @@ method_getEpochSchedule(struct fd_web_replier* replier, struct json_values* valu
   (void)values;
   FD_METHOD_SCRATCH_BEGIN( 1<<28 ) { /* read_epoch consumes a ton of scratch space! */
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
-    ulong smr = ctx->global->blockstore->smr;
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
+    ulong smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), &smr);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"firstNormalEpoch\":%lu,\"firstNormalSlot\":%lu,\"leaderScheduleSlotOffset\":%lu,\"slotsPerEpoch\":%lu,\"warmup\":%s},\"id\":%lu}" CRLF,
     epoch_bank->epoch_schedule.first_normal_epoch,
     epoch_bank->epoch_schedule.first_normal_slot,
@@ -762,8 +762,8 @@ static int
 method_getGenesisHash(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   (void)values;
   FD_METHOD_SCRATCH_BEGIN( 1<<28 ) { /* read_epoch consumes a ton of scratch space! */
-    ulong smr = ctx->global->blockstore->smr;
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
+    ulong smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), &smr);
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
     fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":\"");
     fd_textstream_encode_base58(ts, epoch_bank->genesis_hash.uc, sizeof(fd_pubkey_t));
@@ -923,8 +923,8 @@ method_getMinimumBalanceForRentExemption(struct fd_web_replier* replier, struct 
     ulong size_sz = 0;
     const void* size = json_get_value(values, PATH_SIZE, 3, &size_sz);
     ulong sizen = (size == NULL ? 0UL : (ulong)(*(long*)size));
-    ulong smr = ctx->global->blockstore->smr;
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
+    ulong smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), &smr);
     ulong min_balance = fd_rent_exempt_minimum_balance2(&epoch_bank->rent, sizen);
 
     fd_textstream_t * ts = fd_web_replier_textstream(replier);
@@ -1374,8 +1374,8 @@ vote_account_to_json(fd_textstream_t * ts, fd_vote_accounts_pair_t_mapnode_t * v
 static int
 method_getVoteAccounts(struct fd_web_replier* replier, struct json_values* values, fd_rpc_ctx_t * ctx) {
   FD_METHOD_SCRATCH_BEGIN( 1<<28 ) { /* read_epoch consumes a ton of scratch space! */
-    ulong smr = ctx->global->blockstore->smr;
-    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), smr);
+    ulong smr;
+    fd_epoch_bank_t * epoch_bank = read_epoch_bank(ctx, fd_scratch_virtual(), &smr);
     fd_vote_accounts_t * accts = &epoch_bank->stakes.vote_accounts;
     fd_vote_accounts_pair_t_mapnode_t * root = accts->vote_accounts_root;
     fd_vote_accounts_pair_t_mapnode_t * pool = accts->vote_accounts_pool;
