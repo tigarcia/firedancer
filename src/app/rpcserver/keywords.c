@@ -127,6 +127,11 @@ long fd_webserver_json_keyword(const char* keyw, unsigned long keyw_sz) {
   break;
   case 9:
     switch (keyw[0]) {
+    case 'd':
+      if ((*(unsigned long*)&keyw[1] == 0x6563696C53617461UL)) {
+        return KEYW_JSON_DATASLICE; // "dataSlice"
+      }
+      break;
     case 'g':
       if (((*(unsigned long*)&keyw[1] & 0xFFFFUL) == 0x7465UL)) {
         switch (keyw[3]) {
@@ -721,6 +726,7 @@ const char* un_fd_webserver_json_keyword(long id) {
   case KEYW_JSON_BYTES: return "bytes";
   case KEYW_JSON_COMMITMENT: return "commitment";
   case KEYW_JSON_DATASIZE: return "dataSize";
+  case KEYW_JSON_DATASLICE: return "dataSlice";
   case KEYW_JSON_ENCODING: return "encoding";
   case KEYW_JSON_EPOCH: return "epoch";
   case KEYW_JSON_FILTERS: return "filters";

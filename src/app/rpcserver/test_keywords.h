@@ -64,6 +64,18 @@ void test_fd_webserver_json_keyword(void) {
   assert(fd_webserver_json_keyword("dataS|ze\0\0\0\0\0\0\0", 8) == KEYW_UNKNOWN);
   assert(fd_webserver_json_keyword("dataSi|e\0\0\0\0\0\0\0", 8) == KEYW_UNKNOWN);
   assert(fd_webserver_json_keyword("dataSiz|\0\0\0\0\0\0\0", 8) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("dataSlice\0\0\0\0\0\0\0", 9) == KEYW_JSON_DATASLICE);
+  assert(fd_webserver_json_keyword("dataSlicex\0\0\0\0\0\0\0", 10) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("dataSlic\0\0\0\0\0\0\0", 8) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("|ataSlice\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("d|taSlice\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("da|aSlice\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("dat|Slice\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("data|lice\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("dataS|ice\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("dataSl|ce\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("dataSli|e\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
+  assert(fd_webserver_json_keyword("dataSlic|\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
   assert(fd_webserver_json_keyword("encoding\0\0\0\0\0\0\0", 8) == KEYW_JSON_ENCODING);
   assert(fd_webserver_json_keyword("encodingx\0\0\0\0\0\0\0", 9) == KEYW_UNKNOWN);
   assert(fd_webserver_json_keyword("encodin\0\0\0\0\0\0\0", 7) == KEYW_UNKNOWN);

@@ -294,6 +294,7 @@ int main(int argc, char** argv) {
     { "bytes", false, "KEYW_JSON_BYTES" },
     { "commitment", false, "KEYW_JSON_COMMITMENT" },
     { "dataSize", false, "KEYW_JSON_DATASIZE" },
+    { "dataSlice", false, "KEYW_JSON_DATASLICE" },
     { "encoding", false, "KEYW_JSON_ENCODING" },
     { "epoch", false, "KEYW_JSON_EPOCH" },
     { "filters", false, "KEYW_JSON_FILTERS" },

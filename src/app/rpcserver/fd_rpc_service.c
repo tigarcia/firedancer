@@ -219,22 +219,24 @@ method_getAccountInfo(struct fd_web_replier* replier, struct json_values* values
       return 0;
     }
 
-    static const uint PATH3[4] = {
+    static const uint PATH3[5] = {
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_PARAMS,
-      (JSON_TOKEN_LBRACKET<<16) | 2,
+      (JSON_TOKEN_LBRACKET<<16) | 1,
+      (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_DATASLICE,
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_LENGTH,
       (JSON_TOKEN_INTEGER<<16)
     };
-    static const uint PATH4[4] = {
+    static const uint PATH4[5] = {
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_PARAMS,
-      (JSON_TOKEN_LBRACKET<<16) | 2,
+      (JSON_TOKEN_LBRACKET<<16) | 1,
+      (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_DATASLICE,
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_OFFSET,
       (JSON_TOKEN_INTEGER<<16)
     };
     ulong len_sz = 0;
-    const void* len_ptr = json_get_value(values, PATH3, 4, &len_sz);
+    const void* len_ptr = json_get_value(values, PATH3, 5, &len_sz);
     ulong off_sz = 0;
-    const void* off_ptr = json_get_value(values, PATH4, 4, &off_sz);
+    const void* off_ptr = json_get_value(values, PATH4, 5, &off_sz);
     long off = (off_ptr ? *(long *)off_ptr : FD_LONG_UNSET);
     long len = (len_ptr ? *(long *)len_ptr : FD_LONG_UNSET);
 
@@ -1762,22 +1764,24 @@ ws_method_accountSubscribe(fd_websocket_ctx_t * wsctx, struct json_values * valu
       return 0;
     }
 
-    static const uint PATH3[4] = {
+    static const uint PATH3[5] = {
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_PARAMS,
-      (JSON_TOKEN_LBRACKET<<16) | 2,
+      (JSON_TOKEN_LBRACKET<<16) | 1,
+      (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_DATASLICE,
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_LENGTH,
       (JSON_TOKEN_INTEGER<<16)
     };
-    static const uint PATH4[4] = {
+    static const uint PATH4[5] = {
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_PARAMS,
-      (JSON_TOKEN_LBRACKET<<16) | 2,
+      (JSON_TOKEN_LBRACKET<<16) | 1,
+      (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_DATASLICE,
       (JSON_TOKEN_LBRACE<<16) | KEYW_JSON_OFFSET,
       (JSON_TOKEN_INTEGER<<16)
     };
     ulong len_sz = 0;
-    const void* len_ptr = json_get_value(values, PATH3, 4, &len_sz);
+    const void* len_ptr = json_get_value(values, PATH3, 5, &len_sz);
     ulong off_sz = 0;
-    const void* off_ptr = json_get_value(values, PATH4, 4, &off_sz);
+    const void* off_ptr = json_get_value(values, PATH4, 5, &off_sz);
     if (len_ptr && off_ptr) {
       if (enc == FD_ENC_JSON) {
         fd_web_ws_error(wsctx, "cannot use jsonParsed encoding with slice");
