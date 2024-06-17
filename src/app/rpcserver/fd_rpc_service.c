@@ -245,7 +245,7 @@ method_getAccountInfo(struct fd_web_replier* replier, struct json_values* values
       fd_web_replier_error(replier, "%s", err);
       return 0;
     }
-    fd_textstream_sprintf(ts, "}},\"id\":%lu}" CRLF, ctx->call_id);
+    fd_textstream_sprintf(ts, "},\"id\":%lu}" CRLF, ctx->call_id);
 
     fd_web_replier_done(replier);
 
@@ -1831,7 +1831,7 @@ ws_method_accountSubscribe_update(fd_rpc_ctx_t * ctx, fd_replay_notif_msg_t * ms
       fd_web_ws_error(wsctx, "%s", err);
       return 0;
     }
-    fd_textstream_sprintf(ts, "\"},\"subscription\":%lu}}" CRLF, sub->subsc_id);
+    fd_textstream_sprintf(ts, "},\"subscription\":%lu}}" CRLF, sub->subsc_id);
   } FD_METHOD_SCRATCH_END;
 
   return 1;
