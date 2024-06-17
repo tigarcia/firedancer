@@ -1277,7 +1277,7 @@ method_getTransaction(struct fd_web_replier* replier, struct json_values* values
 
   fd_textstream_sprintf(ts, "{\"jsonrpc\":\"2.0\",\"result\":{\"context\":{\"apiVersion\":\"" API_VERSION "\",\"slot\":%lu},\"blockTime\":%ld,\"slot\":%lu,",
                         blockstore->smr, blk_ts/(long)1e9, elem.slot);
-  fd_txn_to_json( ts, (fd_txn_t *)txn_out, txn_data_raw, NULL, 0, enc, 0, FD_BLOCK_DETAIL_FULL, 0 );
+  fd_txn_to_json( ts, (fd_txn_t *)txn_out, txn_data_raw, enc, 0, FD_BLOCK_DETAIL_FULL, 0 );
   fd_textstream_sprintf(ts, "},\"id\":%lu}" CRLF, ctx->call_id);
 
   fd_web_replier_done(replier);

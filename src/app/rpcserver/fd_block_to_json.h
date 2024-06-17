@@ -4,11 +4,13 @@ typedef enum {
 
 enum fd_block_detail { FD_BLOCK_DETAIL_FULL, FD_BLOCK_DETAIL_ACCTS, FD_BLOCK_DETAIL_SIGS, FD_BLOCK_DETAIL_NONE };
 
+int fd_txn_meta_to_json( fd_textstream_t * ts,
+                         const void * meta_raw,
+                         ulong meta_raw_sz );
+
 int fd_txn_to_json( fd_textstream_t * ts,
                     fd_txn_t* txn,
                     const uchar* raw,
-                    const void * meta_raw,
-                    ulong meta_raw_sz,
                     fd_rpc_encoding_t encoding,
                     long maxvers,
                     enum fd_block_detail detail,

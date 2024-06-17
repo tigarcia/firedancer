@@ -133,86 +133,86 @@ void fd_inner_instructions_to_json( fd_textstream_t * ts,
   EMIT_SIMPLE("]}");
 }
 
-int fd_txn_to_json( fd_textstream_t * ts,
-                    fd_txn_t* txn,
-                    const uchar* raw,
-                    const void * meta_raw,
-                    ulong meta_raw_sz,
-                    fd_rpc_encoding_t encoding,
-                    long maxvers,
-                    enum fd_block_detail detail,
-                    int rewards ) {
+int fd_txn_meta_to_json( fd_textstream_t * ts,
+                         const void * meta_raw,
+                         ulong meta_raw_sz ) {
+  fd_solblock_TransactionStatusMeta txn_status = {0};
+  pb_istream_t stream = pb_istream_from_buffer( meta_raw, meta_raw_sz );
+  if( FD_UNLIKELY( !pb_decode( &stream, fd_solblock_TransactionStatusMeta_fields, &txn_status ) ) ) {
+    FD_LOG_ERR(( "failed to decode txn status: %s", PB_GET_ERROR( &stream ) ));
+  }
+
+  EMIT_SIMPLE("\"meta\":{");
+  if (txn_status.has_compute_units_consumed)
+    fd_textstream_sprintf(ts, "\"computeUnitsConsumed\":%lu,", txn_status.compute_units_consumed);
+  EMIT_SIMPLE("\"err\":");
+  if (txn_status.has_err)
+    fd_error_to_json(ts, txn_status.err.err->bytes, txn_status.err.err->size);
+  else
+    EMIT_SIMPLE("null");
+  fd_textstream_sprintf(ts, ",\"fee\":%lu,\"innerInstructions\":[", txn_status.fee);
+  if (!txn_status.inner_instructions_none) {
+    for (pb_size_t i = 0; i < txn_status.inner_instructions_count; ++i) {
+      if ( i > 0 ) EMIT_SIMPLE(",");
+      fd_inner_instructions_to_json(ts, txn_status.inner_instructions + i);
+    }
+  }
+  EMIT_SIMPLE("],\"loadedAddresses\":{\"readonly\":[");
+  for (pb_size_t i = 0; i < txn_status.loaded_readonly_addresses_count; ++i) {
+    pb_bytes_array_t * ba = txn_status.loaded_readonly_addresses[i];
+    if (ba->size == 32) {
+      char buf32[FD_BASE58_ENCODED_32_SZ];
+      fd_base58_encode_32(ba->bytes, NULL, buf32);
+      fd_textstream_sprintf(ts, "%s\"%s\"", (i == 0 ? "" : ","), buf32);
+    } else
+      fd_textstream_sprintf(ts, "%s\"\"", (i == 0 ? "" : ","));
+  }
+  EMIT_SIMPLE("],\"writable\":[");
+  for (pb_size_t i = 0; i < txn_status.loaded_writable_addresses_count; ++i) {
+    pb_bytes_array_t * ba = txn_status.loaded_writable_addresses[i];
+    if (ba->size == 32) {
+      char buf32[FD_BASE58_ENCODED_32_SZ];
+      fd_base58_encode_32(ba->bytes, NULL, buf32);
+      fd_textstream_sprintf(ts, "%s\"%s\"", (i == 0 ? "" : ","), buf32);
+    } else
+      fd_textstream_sprintf(ts, "%s\"\"", (i == 0 ? "" : ","));
+  }
+  EMIT_SIMPLE("]},\"logMessages\":[");
+  for (pb_size_t i = 0; i < txn_status.log_messages_count; ++i)
+    fd_textstream_sprintf(ts, "%s\"%s\"", (i == 0 ? "" : ","), txn_status.log_messages[i]);
+  EMIT_SIMPLE("],\"postBalances\":[");
+  for (pb_size_t i = 0; i < txn_status.post_balances_count; ++i)
+    fd_textstream_sprintf(ts, "%s%lu", (i == 0 ? "" : ","), txn_status.post_balances[i]);
+  EMIT_SIMPLE("],\"postTokenBalances\":[");
+  for (pb_size_t i = 0; i < txn_status.post_token_balances_count; ++i) {
+    if (i > 0) EMIT_SIMPLE(",");
+    fd_tokenbalance_to_json(ts, txn_status.post_token_balances + i);
+  }
+  EMIT_SIMPLE("],\"preBalances\":[");
+  for (pb_size_t i = 0; i < txn_status.pre_balances_count; ++i)
+    fd_textstream_sprintf(ts, "%s%lu", (i == 0 ? "" : ","), txn_status.pre_balances[i]);
+  EMIT_SIMPLE("],\"preTokenBalances\":[");
+  for (pb_size_t i = 0; i < txn_status.pre_token_balances_count; ++i) {
+    if (i > 0) EMIT_SIMPLE(",");
+    fd_tokenbalance_to_json(ts, txn_status.pre_token_balances + i);
+  }
+  EMIT_SIMPLE("],\"rewards\":[");
+  EMIT_SIMPLE("],\"status\":{\"Ok\":null}},");
+
+  pb_release( fd_solblock_TransactionStatusMeta_fields, &txn_status );
+
+  return 0;
+}
+
+int fd_txn_to_json_full( fd_textstream_t * ts,
+                         fd_txn_t* txn,
+                         const uchar* raw,
+                         fd_rpc_encoding_t encoding,
+                         long maxvers,
+                         int rewards ) {
   (void)encoding;
   (void)maxvers;
-  (void)detail;
   (void)rewards;
-
-  if (meta_raw) {
-    fd_solblock_TransactionStatusMeta txn_status = {0};
-    pb_istream_t stream = pb_istream_from_buffer( meta_raw, meta_raw_sz );
-    if( FD_UNLIKELY( !pb_decode( &stream, fd_solblock_TransactionStatusMeta_fields, &txn_status ) ) ) {
-      FD_LOG_ERR(( "failed to decode txn status: %s", PB_GET_ERROR( &stream ) ));
-    }
-
-    EMIT_SIMPLE("\"meta\":{");
-    if (txn_status.has_compute_units_consumed)
-      fd_textstream_sprintf(ts, "\"computeUnitsConsumed\":%lu,", txn_status.compute_units_consumed);
-    EMIT_SIMPLE("\"err\":");
-    if (txn_status.has_err)
-      fd_error_to_json(ts, txn_status.err.err->bytes, txn_status.err.err->size);
-    else
-      EMIT_SIMPLE("null");
-    fd_textstream_sprintf(ts, ",\"fee\":%lu,\"innerInstructions\":[", txn_status.fee);
-    if (!txn_status.inner_instructions_none) {
-      for (pb_size_t i = 0; i < txn_status.inner_instructions_count; ++i) {
-        if ( i > 0 ) EMIT_SIMPLE(",");
-        fd_inner_instructions_to_json(ts, txn_status.inner_instructions + i);
-      }
-    }
-    EMIT_SIMPLE("],\"loadedAddresses\":{\"readonly\":[");
-    for (pb_size_t i = 0; i < txn_status.loaded_readonly_addresses_count; ++i) {
-      pb_bytes_array_t * ba = txn_status.loaded_readonly_addresses[i];
-      if (ba->size == 32) {
-        char buf32[FD_BASE58_ENCODED_32_SZ];
-        fd_base58_encode_32(ba->bytes, NULL, buf32);
-        fd_textstream_sprintf(ts, "%s\"%s\"", (i == 0 ? "" : ","), buf32);
-      } else
-        fd_textstream_sprintf(ts, "%s\"\"", (i == 0 ? "" : ","));
-    }
-    EMIT_SIMPLE("],\"writable\":[");
-    for (pb_size_t i = 0; i < txn_status.loaded_writable_addresses_count; ++i) {
-      pb_bytes_array_t * ba = txn_status.loaded_writable_addresses[i];
-      if (ba->size == 32) {
-        char buf32[FD_BASE58_ENCODED_32_SZ];
-        fd_base58_encode_32(ba->bytes, NULL, buf32);
-        fd_textstream_sprintf(ts, "%s\"%s\"", (i == 0 ? "" : ","), buf32);
-      } else
-        fd_textstream_sprintf(ts, "%s\"\"", (i == 0 ? "" : ","));
-    }
-    EMIT_SIMPLE("]},\"logMessages\":[");
-    for (pb_size_t i = 0; i < txn_status.log_messages_count; ++i)
-      fd_textstream_sprintf(ts, "%s\"%s\"", (i == 0 ? "" : ","), txn_status.log_messages[i]);
-    EMIT_SIMPLE("],\"postBalances\":[");
-    for (pb_size_t i = 0; i < txn_status.post_balances_count; ++i)
-      fd_textstream_sprintf(ts, "%s%lu", (i == 0 ? "" : ","), txn_status.post_balances[i]);
-    EMIT_SIMPLE("],\"postTokenBalances\":[");
-    for (pb_size_t i = 0; i < txn_status.post_token_balances_count; ++i) {
-      if (i > 0) EMIT_SIMPLE(",");
-      fd_tokenbalance_to_json(ts, txn_status.post_token_balances + i);
-    }
-    EMIT_SIMPLE("],\"preBalances\":[");
-    for (pb_size_t i = 0; i < txn_status.pre_balances_count; ++i)
-      fd_textstream_sprintf(ts, "%s%lu", (i == 0 ? "" : ","), txn_status.pre_balances[i]);
-    EMIT_SIMPLE("],\"preTokenBalances\":[");
-    for (pb_size_t i = 0; i < txn_status.pre_token_balances_count; ++i) {
-      if (i > 0) EMIT_SIMPLE(",");
-      fd_tokenbalance_to_json(ts, txn_status.pre_token_balances + i);
-    }
-    EMIT_SIMPLE("],\"rewards\":[");
-    EMIT_SIMPLE("],\"status\":{\"Ok\":null}},");
-
-    pb_release( fd_solblock_TransactionStatusMeta_fields, &txn_status );
-  }
 
   EMIT_SIMPLE("\"transaction\":{\"message\":{\"accountKeys\":[");
 
@@ -262,6 +262,56 @@ int fd_txn_to_json( fd_textstream_t * ts,
   fd_textstream_sprintf(ts, "]},\"version\":%s", vers);
 
   return 0;
+}
+int fd_txn_to_json_accts( fd_textstream_t * ts,
+                          fd_txn_t* txn,
+                          const uchar* raw,
+                          fd_rpc_encoding_t encoding,
+                          long maxvers,
+                          int rewards ) {
+  (void)encoding;
+  (void)maxvers;
+  (void)rewards;
+
+  EMIT_SIMPLE("\"transaction\":{\"accountKeys\":[");
+
+  ushort acct_cnt = txn->acct_addr_cnt;
+  const fd_pubkey_t * accts = (const fd_pubkey_t *)(raw + txn->acct_addr_off);
+  char buf32[FD_BASE58_ENCODED_32_SZ];
+  for (ushort idx = 0; idx < acct_cnt; idx++) {
+    fd_base58_encode_32(accts[idx].uc, NULL, buf32);
+    bool signer = (idx < txn->signature_cnt);
+    bool writable = ((idx < txn->signature_cnt - txn->readonly_signed_cnt) ||
+                     ((idx >= txn->signature_cnt) && (idx < acct_cnt - txn->readonly_unsigned_cnt)));
+    fd_textstream_sprintf(ts, "%s{\"pubkey\":\"%s\",\"signer\":%s,\"source\":\"transaction\",\"writable\":%s}",
+                          (idx == 0 ? "" : ","), buf32, (signer ? "true" : "false"), (writable ? "true" : "false"));
+  }
+
+  fd_textstream_sprintf(ts, "],\"signatures\":[");
+  fd_ed25519_sig_t const * sigs = (fd_ed25519_sig_t const *)(raw + txn->signature_off);
+  for ( uchar j = 0; j < txn->signature_cnt; j++ ) {
+    char buf64[FD_BASE58_ENCODED_64_SZ];
+    fd_base58_encode_64((const uchar*)&sigs[j], NULL, buf64);
+    fd_textstream_sprintf(ts, "%s\"%s\"", (j == 0 ? "" : ","), buf64);
+  }
+  EMIT_SIMPLE("]}");
+
+  return 0;
+}
+
+int fd_txn_to_json( fd_textstream_t * ts,
+                    fd_txn_t* txn,
+                    const uchar* raw,
+                    fd_rpc_encoding_t encoding,
+                    long maxvers,
+                    enum fd_block_detail detail,
+                    int rewards ) {
+  if( detail == FD_BLOCK_DETAIL_FULL )
+    return fd_txn_to_json_full( ts, txn, raw, encoding, maxvers, rewards );
+  else if( detail == FD_BLOCK_DETAIL_ACCTS )
+    return fd_txn_to_json_accts( ts, txn, raw, encoding, maxvers, rewards );
+  FD_LOG_ERR(("unsupported detail parameter"));
+  return -1;
 }
 
 int fd_block_to_json( fd_textstream_t * ts,
@@ -315,22 +365,7 @@ int fd_block_to_json( fd_textstream_t * ts,
         } else
           EMIT_SIMPLE(",{");
 
-        const void * val2 = NULL;
-        ulong val2_sz = 0;
-#if 0
-        if ( stat_block ) {
-          fd_ed25519_sig_t const * sigs = (fd_ed25519_sig_t const *)(raw + ((fd_txn_t *)txn_out)->signature_off);
-          txn_map_elem_t * elem = txn_map_elem_query( txn_map, (const struct txn_map_key*)sigs, NULL );
-          if (elem && elem->txn_stat_off != ULONG_MAX) {
-            if (elem->txn_stat_off + elem->txn_stat_sz > stat_block_sz)
-              FD_LOG_ERR(("correct transaction index"));
-            val2 = (const uchar*)stat_block + elem->txn_stat_off;
-            val2_sz = elem->txn_stat_sz;
-          }
-        }
-#endif
-
-        int r = fd_txn_to_json( ts, (fd_txn_t *)txn_out, raw, val2, val2_sz, encoding, maxvers, detail, rewards );
+        int r = fd_txn_to_json( ts, (fd_txn_t *)txn_out, raw, encoding, maxvers, detail, rewards );
         if ( r ) {
           return r;
         }
