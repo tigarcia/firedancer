@@ -901,7 +901,9 @@ replay( fd_ledger_args_t * args ) {
 
   fd_capture_ctx_t *    capture_ctx = NULL;
   FILE *                capture_file = NULL;
-
+  
+  uchar * status_cache_mem = fd_wksp_alloc_laddr( wksp, fd_txncache_align(), fd_txncache_footprint(FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT), FD_TXNCACHE_MAGIC );
+  fd_txncache_t * status_cache = fd_txncache_join( fd_txncache_new( status_cache_mem, FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT ) );
 
   /* Check number of records in funk. If rec_cnt == 0, then it can be assumed
      that you need to load in snapshot(s). */
@@ -917,6 +919,7 @@ replay( fd_ledger_args_t * args ) {
     fd_acc_mgr_t mgr[1];
     slot_ctx->acc_mgr = fd_acc_mgr_new( mgr, funk );
     slot_ctx->blockstore = args->blockstore;
+    slot_ctx->status_cache = status_cache;
 
     /* Load in snapshot(s) */
     if( args->snapshot ) {
@@ -941,7 +944,7 @@ replay( fd_ledger_args_t * args ) {
   void * tpool_scr_mem = setup_tpool( &state, &runtime_args, valloc );
 
   fd_replay_t * replay = NULL;
-  fd_tvu_main_setup( &state, &replay, NULL, NULL, 0, wksp, &runtime_args, NULL, capture_ctx, capture_file );
+  fd_tvu_main_setup( &state, &replay, NULL, NULL, 0, wksp, &runtime_args, NULL, capture_ctx, capture_file, status_cache );
 
   if( !args->on_demand_block_ingest ) {
     ingest_rocksdb( args->alloc, args->rocksdb_list[ 0UL ], args->start_slot, args->end_slot, args->blockstore, 0, args->trash_hash );
@@ -1001,6 +1004,9 @@ prune( fd_ledger_args_t * args ) {
   fd_funk_t * unpruned_funk             = args->funk;
   fd_blockstore_t * unpruned_blockstore = args->blockstore;
 
+  uchar * status_cache_mem = fd_wksp_alloc_laddr( unpruned_wksp, fd_txncache_align(), fd_txncache_footprint(FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT), FD_TXNCACHE_MAGIC );
+  fd_txncache_t * status_cache = fd_txncache_join( fd_txncache_new( status_cache_mem, FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT ) );
+
   uchar * epoch_ctx_mem_unpruned = fd_wksp_alloc_laddr( unpruned_wksp, fd_exec_epoch_ctx_align(), fd_exec_epoch_ctx_footprint( args->vote_acct_max ), FD_EXEC_EPOCH_CTX_MAGIC );
   fd_exec_epoch_ctx_t * epoch_ctx_unpruned = fd_exec_epoch_ctx_join( fd_exec_epoch_ctx_new( epoch_ctx_mem_unpruned, args->vote_acct_max ) );
 
@@ -1012,6 +1018,7 @@ prune( fd_ledger_args_t * args ) {
   fd_acc_mgr_t mgr_unpruned[1];
   slot_ctx_unpruned->acc_mgr = fd_acc_mgr_new( mgr_unpruned, unpruned_funk );
   slot_ctx_unpruned->blockstore = unpruned_blockstore;
+  slot_ctx_unpruned->status_cache = status_cache;
 
   /* Setup pruned wksp */
   fd_wksp_t * pruned_wksp = fd_wksp_new_anonymous( FD_SHMEM_GIGANTIC_PAGE_SZ, args->pages_pruned, 0, "prunedwksp", 0UL );
@@ -1063,14 +1070,10 @@ prune( fd_ledger_args_t * args ) {
   uchar slot_ctx_mem[FD_EXEC_SLOT_CTX_FOOTPRINT] __attribute__((aligned(FD_EXEC_SLOT_CTX_ALIGN)));
   fd_exec_slot_ctx_t * slot_ctx = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem, fd_alloc_virtual( alloc ) ) );
 
-  uchar * status_cache_mem = fd_wksp_alloc_laddr( pruned_wksp, fd_txncache_align(), fd_txncache_footprint(FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT), FD_TXNCACHE_MAGIC );
-  fd_txncache_t * status_cache = fd_txncache_join( fd_txncache_new( status_cache_mem, FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT ) );
   slot_ctx->epoch_ctx = epoch_ctx;
 
   fd_acc_mgr_t pruned_mgr[1];
   slot_ctx->acc_mgr = fd_acc_mgr_new( pruned_mgr, pruned_funk );
-  slot_ctx->blockstore = pruned_blockstore;
-  slot_ctx->status_cache = status_cache;
 
   fd_funk_leave( unpruned_funk );
 
@@ -1110,7 +1113,7 @@ prune( fd_ledger_args_t * args ) {
 
   void * tpool_scr_mem = setup_tpool( &state, &runtime_args, valloc );
 
-  fd_tvu_main_setup( &state, &replay, &slot_ctx_unpruned, NULL, 0, unpruned_wksp, &runtime_args, gossip_deliver_arg, NULL, NULL );
+  fd_tvu_main_setup( &state, &replay, &slot_ctx_unpruned, NULL, 0, unpruned_wksp, &runtime_args, gossip_deliver_arg, NULL, NULL, status_cache );
 
   if( args->on_demand_block_ingest == 0 ) { // TODO: im pretty sure you can move to this to after the tvu_setup
     if( args->start_slot == 0 ) {
