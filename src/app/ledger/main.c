@@ -1062,11 +1062,15 @@ prune( fd_ledger_args_t * args ) {
 
   uchar slot_ctx_mem[FD_EXEC_SLOT_CTX_FOOTPRINT] __attribute__((aligned(FD_EXEC_SLOT_CTX_ALIGN)));
   fd_exec_slot_ctx_t * slot_ctx = fd_exec_slot_ctx_join( fd_exec_slot_ctx_new( slot_ctx_mem, fd_alloc_virtual( alloc ) ) );
+
+  uchar * status_cache_mem = fd_wksp_alloc_laddr( pruned_wksp, fd_txncache_align(), fd_txncache_footprint(FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT), FD_TXNCACHE_MAGIC );
+  fd_txncache_t * status_cache = fd_txncache_join( fd_txncache_new( status_cache_mem, FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT ) );
   slot_ctx->epoch_ctx = epoch_ctx;
 
   fd_acc_mgr_t pruned_mgr[1];
   slot_ctx->acc_mgr = fd_acc_mgr_new( pruned_mgr, pruned_funk );
   slot_ctx->blockstore = pruned_blockstore;
+  slot_ctx->status_cache = status_cache;
 
   fd_funk_leave( unpruned_funk );
 
