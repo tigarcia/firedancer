@@ -327,8 +327,65 @@ int fd_block_to_json( fd_textstream_t * ts,
   EMIT_SIMPLE("{\"jsonrpc\":\"2.0\",\"result\":{");
 
   if ( meta ) {
-    fd_textstream_sprintf(ts, "\"blockHeight\":%lu,\"blockTime\":%ld,\"parentSlot\":%lu,",
+    fd_textstream_sprintf(ts, "\"blockHeight\":%lu,\"blockTime\":%ld,\"parentSlot\":%lu",
                           blk->height, blk->ts/(long)1e9, meta->parent_slot);
+  }
+
+  if( detail == FD_BLOCK_DETAIL_NONE ) {
+    fd_textstream_sprintf(ts, "},\"id\":%lu}", call_id);
+    return 0;
+  }
+
+  EMIT_SIMPLE(",");
+
+  if( detail == FD_BLOCK_DETAIL_SIGS ) {
+    EMIT_SIMPLE("\"signatures\":[");
+
+    int first_sig = 1;
+    ulong blockoff = 0;
+    while (blockoff < blk_sz) {
+      if ( blockoff + sizeof(ulong) > blk_sz )
+        FD_LOG_ERR(("premature end of block"));
+      ulong mcount = *(const ulong *)(blk_data + blockoff);
+      blockoff += sizeof(ulong);
+
+      /* Loop across microblocks */
+      for (ulong mblk = 0; mblk < mcount; ++mblk) {
+        if ( blockoff + sizeof(fd_microblock_hdr_t) > blk_sz )
+          FD_LOG_ERR(("premature end of block"));
+        fd_microblock_hdr_t * hdr = (fd_microblock_hdr_t *)((const uchar *)blk_data + blockoff);
+        blockoff += sizeof(fd_microblock_hdr_t);
+
+        /* Loop across transactions */
+        for ( ulong txn_idx = 0; txn_idx < hdr->txn_cnt; txn_idx++ ) {
+          uchar txn_out[FD_TXN_MAX_SZ];
+          ulong pay_sz = 0;
+          const uchar* raw = (const uchar *)blk_data + blockoff;
+          ulong txn_sz = fd_txn_parse_core(raw, fd_ulong_min(blk_sz - blockoff, FD_TXN_MTU), txn_out, NULL, &pay_sz, 0);
+          if ( txn_sz == 0 || txn_sz > FD_TXN_MAX_SZ )
+            FD_LOG_ERR( ( "failed to parse transaction %lu in microblock %lu",
+                          txn_idx,
+                          mblk ) );
+          fd_txn_t * txn = (fd_txn_t *)txn_out;
+
+          /* Loop across signatures */
+          fd_ed25519_sig_t const * sigs = (fd_ed25519_sig_t const *)(raw + txn->signature_off);
+          for ( uchar j = 0; j < txn->signature_cnt; j++ ) {
+            char buf64[FD_BASE58_ENCODED_64_SZ];
+            fd_base58_encode_64((const uchar*)&sigs[j], NULL, buf64);
+            fd_textstream_sprintf(ts, "%s\"%s\"", (first_sig ? "" : ","), buf64);
+            first_sig = 0;
+          }
+
+          blockoff += pay_sz;
+        }
+      }
+    }
+    if ( blockoff != blk_sz )
+      FD_LOG_ERR(("garbage at end of block"));
+
+    fd_textstream_sprintf(ts, "]},\"id\":%lu}", call_id);
+    return 0;
   }
 
   EMIT_SIMPLE("\"transactions\":[");
@@ -379,9 +436,7 @@ int fd_block_to_json( fd_textstream_t * ts,
   if ( blockoff != blk_sz )
     FD_LOG_ERR(("garbage at end of block"));
 
-  EMIT_SIMPLE("]"); // transactions
-
-  fd_textstream_sprintf(ts, "},\"id\":%lu}", call_id);
+  fd_textstream_sprintf(ts, "]},\"id\":%lu}", call_id);
 
   return 0;
 }
