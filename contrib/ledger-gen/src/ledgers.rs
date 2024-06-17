@@ -97,3 +97,11 @@ pub fn deploy_invoke_same_slot(client: &RpcClient, arc_client: &Arc<RpcClient>, 
 
     println!("Program Id: {:?}", program_account.pubkey());
 }
+
+pub fn create_nonce_account(client: &RpcClient, payer: &Keypair) {
+    let blockhash = client.get_latest_blockhash().unwrap();
+    let (nonce_account, create_nonce_instructions) = programs::create_nonce_account_instructions(None, &payer, 2000000);
+    let transaction = utils::create_message_and_sign(&create_nonce_instructions, &payer, vec![&payer, &nonce_account], blockhash);
+    let _ = client.send_and_confirm_transaction(&transaction).unwrap();
+    println!("Created Nonce Account: {:?} - Slot: {:?}", nonce_account.pubkey(), client.get_slot_with_commitment(CommitmentConfig::processed()).unwrap());
+}
