@@ -37,6 +37,10 @@ struct fd_snapshot_loader {
   /* Downstream restore */
 
   fd_snapshot_restore_t * restore;
+
+  /* Hash from filename */
+
+  fd_hash_t fhash;
 };
 
 typedef struct fd_snapshot_loader fd_snapshot_loader_t;
@@ -116,6 +120,25 @@ fd_snapshot_loader_delete( fd_snapshot_loader_t * loader ) {
   return loader;
 }
 
+void
+fd_get_hash_from_filename( fd_snapshot_loader_t * d,
+                           const char *           snapshotfile ) {
+  ulong const slen = strlen(snapshotfile);
+  const char *hptr = &snapshotfile[slen - 1];
+  while ((hptr >= snapshotfile) && (*hptr != '-'))
+    hptr--;
+  hptr++;
+  char hash[100];
+  ulong const hlen = (size_t) ((&snapshotfile[slen - 1] - hptr) - 7);
+  if( hlen > sizeof(hash)-1U )
+    FD_LOG_ERR(( "invalid snapshot file %s", snapshotfile ));
+  memcpy(hash, hptr, hlen);
+  hash[hlen] = '\0';
+
+  if( FD_UNLIKELY( !fd_base58_decode_32( hash, d->fhash.uc ) ) )
+    FD_LOG_ERR(( "invalid snapshot hash" ));
+}
+
 fd_snapshot_loader_t *
 fd_snapshot_loader_init( fd_snapshot_loader_t *    d,
                          fd_snapshot_restore_t *   restore,
@@ -130,6 +153,8 @@ fd_snapshot_loader_init( fd_snapshot_loader_t *    d,
       FD_LOG_WARNING(( "open(%s) failed (%d-%s)", src->file.path, errno, fd_io_strerror( errno ) ));
       return NULL;
     }
+
+    fd_get_hash_from_filename( d, src->file.path );
 
     if( FD_UNLIKELY( !fd_io_istream_file_new( d->vfile, d->snapshot_fd ) ) ) {
       FD_LOG_WARNING(( "Failed to create fd_io_istream_file_t" ));
@@ -285,4 +310,9 @@ fd_snapshot_src_parse( fd_snapshot_src_t * src,
   }
 
   __builtin_unreachable();
+}
+
+fd_hash_t *
+fd_snapshot_get_hash( fd_snapshot_loader_t * loader ) {
+  return &loader->fhash;
 }

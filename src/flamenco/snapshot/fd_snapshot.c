@@ -50,7 +50,7 @@ restore_manifest( void *                 ctx,
   return (!!fd_exec_slot_ctx_recover( ctx, manifest ) ? 0 : EINVAL);
 }
 
-static void
+static fd_hash_t
 load_one_snapshot( fd_exec_slot_ctx_t * slot_ctx,
                    char *               source_cstr ) {
 
@@ -90,10 +90,14 @@ load_one_snapshot( fd_exec_slot_ctx_t * slot_ctx,
     FD_LOG_ERR(( "Failed to load snapshot (%d-%s)", err, fd_io_strerror( err ) ));
   }
 
+  fd_hash_t fhash = *fd_snapshot_get_hash( loader );
+
   fd_valloc_free( valloc, fd_snapshot_loader_delete ( loader_mem  ) );
   fd_valloc_free( valloc, fd_snapshot_restore_delete( restore_mem ) );
 
   FD_LOG_NOTICE(( "Finished reading snapshot %s", source_cstr ));
+
+  return fhash;
 }
 
 
@@ -119,31 +123,16 @@ fd_snapshot_load( const char *         snapshotfile,
     break;
   }
 
-  ulong const slen = strlen(snapshotfile);
-  const char *hptr = &snapshotfile[slen - 1];
-  while ((hptr >= snapshotfile) && (*hptr != '-'))
-    hptr--;
-  hptr++;
-  char hash[100];
-  ulong const hlen = (size_t) ((&snapshotfile[slen - 1] - hptr) - 7);
-  if( hlen > sizeof(hash)-1U )
-    FD_LOG_ERR(( "invalid snapshot file %s", snapshotfile ));
-  memcpy(hash, hptr, hlen);
-  hash[hlen] = '\0';
-
-  fd_hash_t fhash;
-  if( FD_UNLIKELY( !fd_base58_decode_32( hash, fhash.uc ) ) )
-    FD_LOG_ERR(( "invalid snapshot hash" ));
-
   fd_funk_speed_load_mode( slot_ctx->acc_mgr->funk, 1 );
   fd_funk_start_write( slot_ctx->acc_mgr->funk );
 
   fd_funk_txn_t * child_txn = slot_ctx->funk_txn;
 
   fd_scratch_push();
+  size_t slen = strlen( snapshotfile );
   char * snapshot_cstr = fd_scratch_alloc( 1UL, slen + 1 );
   fd_cstr_fini( fd_cstr_append_text( fd_cstr_init( snapshot_cstr ), snapshotfile, slen ) );
-  load_one_snapshot( slot_ctx, snapshot_cstr );
+  fd_hash_t fhash = load_one_snapshot( slot_ctx, snapshot_cstr );
   fd_scratch_pop();
 
   // In order to calculate the snapshot hash, we need to know what features are active...

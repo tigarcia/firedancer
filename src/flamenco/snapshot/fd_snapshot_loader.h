@@ -92,6 +92,12 @@ fd_snapshot_src_t *
 fd_snapshot_src_parse( fd_snapshot_src_t * src,
                        char *              cstr );
 
+
+/* Extract the hash from the filename */
+
+fd_hash_t *
+fd_snapshot_get_hash( fd_snapshot_loader_t * loader );
+
 FD_PROTOTYPES_END
 
 #endif /* HEADER_fd_src_flamenco_snapshot_fd_snapshot_loader_h */
