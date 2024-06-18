@@ -124,7 +124,8 @@ fd_snapshot_loader_delete( fd_snapshot_loader_t * loader ) {
 fd_snapshot_loader_t *
 fd_snapshot_loader_init( fd_snapshot_loader_t *    d,
                          fd_snapshot_restore_t *   restore,
-                         fd_snapshot_src_t const * src ) {
+                         fd_snapshot_src_t const * src,
+                         ulong                     base_slot ) {
 
   d->restore = restore;
 
@@ -136,7 +137,7 @@ fd_snapshot_loader_init( fd_snapshot_loader_t *    d,
       return NULL;
     }
 
-    if( FD_UNLIKELY( !fd_snapshot_name_from_cstr( &d->name, src->file.path ) ) ) {
+    if( FD_UNLIKELY( !fd_snapshot_name_from_cstr( &d->name, src->file.path, base_slot ) ) ) {
       return NULL;
     }
 
@@ -148,7 +149,7 @@ fd_snapshot_loader_init( fd_snapshot_loader_t *    d,
     d->vsrc = fd_io_istream_file_virtual( d->vfile );
     break;
   case FD_SNAPSHOT_SRC_HTTP:
-    if( FD_UNLIKELY( !fd_snapshot_http_new( d->vhttp, src->http.ip4, src->http.port, &d->name ) ) ) {
+    if( FD_UNLIKELY( !fd_snapshot_http_new( d->vhttp, src->http.ip4, src->http.port, base_slot, &d->name ) ) ) {
       FD_LOG_WARNING(( "Failed to create fd_snapshot_http_t" ));
       return NULL;
     }

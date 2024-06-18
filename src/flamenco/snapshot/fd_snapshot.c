@@ -17,17 +17,19 @@
 fd_snapshot_name_t *
 fd_snapshot_name_from_buf( fd_snapshot_name_t * id,
                            char const *         str,
-                           ulong                str_len ) {
+                           ulong                str_len,
+                           ulong                base_slot ) {
   char buf[ 4096 ];
   str_len = fd_ulong_min( sizeof(buf)-1, str_len );
   fd_memcpy( buf, str, str_len );
 
-  return fd_snapshot_name_from_cstr( id, buf );
+  return fd_snapshot_name_from_cstr( id, buf, base_slot );
 }
 
 fd_snapshot_name_t *
 fd_snapshot_name_from_cstr( fd_snapshot_name_t * id,
-                          char const *         cstr ) {
+                            char const *         cstr,
+                            ulong                base_slot ) {
 
   fd_memset( id, 0, sizeof(fd_snapshot_name_t) );
 
@@ -60,6 +62,12 @@ fd_snapshot_name_from_cstr( fd_snapshot_name_t * id,
       return NULL;
     }
     cstr = endptr+1;
+
+    if( base_slot != id->slot ) {
+      FD_LOG_WARNING(( "failed to load snapshot: \"%s\"", cstr ));
+      FD_LOG_WARNING(( "expected base slot %lu but got %lu, incremental snapshot does not match full snapshot", base_slot, id->slot ));
+      return NULL;
+    }
   }
 
   char const * file_ext = strchr( cstr, '.' );
@@ -71,7 +79,7 @@ fd_snapshot_name_from_cstr( fd_snapshot_name_t * id,
     hash_cstr[ file_ext_off ] = '\0';
   }
   strncpy( id->file_ext, file_ext, sizeof(id->file_ext)-1 );
-  
+
   if( FD_UNLIKELY( !fd_base58_decode_32( hash_cstr, id->fhash.hash ) ) ) {
     FD_LOG_WARNING(( "invalid snapshot file name: \"%s\"", cstr ));
     return NULL;
@@ -144,7 +152,7 @@ load_one_snapshot( fd_exec_slot_ctx_t * slot_ctx,
     FD_LOG_ERR(( "Failed to load snapshot" ));
   }
 
-  if( FD_UNLIKELY( !fd_snapshot_loader_init( loader, restore, src ) ) ) {
+  if( FD_UNLIKELY( !fd_snapshot_loader_init( loader, restore, src, slot_ctx->slot_bank.slot ) ) ) {
     FD_LOG_ERR(( "Failed to init snapshot loader" ));
   }
 

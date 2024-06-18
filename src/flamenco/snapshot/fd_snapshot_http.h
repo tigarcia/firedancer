@@ -66,6 +66,10 @@ struct fd_snapshot_http {
 
   fd_snapshot_name_t * name_out;
   fd_snapshot_name_t   name_dummy[1];
+
+  /* Slot number that incremental snapshot should be based off of */
+
+  ulong base_slot;
 };
 
 typedef struct fd_snapshot_http fd_snapshot_http_t;
@@ -78,6 +82,7 @@ fd_snapshot_http_t *
 fd_snapshot_http_new( void *               mem,
                       uint                 dst_ipv4,
                       ushort               dst_port,
+                      ulong                base_slot,
                       fd_snapshot_name_t * name_out );
 
 void *

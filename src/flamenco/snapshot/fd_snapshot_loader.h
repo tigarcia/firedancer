@@ -74,7 +74,8 @@ fd_snapshot_loader_delete( fd_snapshot_loader_t * loader );
 fd_snapshot_loader_t *
 fd_snapshot_loader_init( fd_snapshot_loader_t *    loader,
                          fd_snapshot_restore_t *   restore,
-                         fd_snapshot_src_t const * src );
+                         fd_snapshot_src_t const * src,
+                         ulong                     base_slot );
 
 /* fd_snapshot_loader_advance polls the tar reader for data.  This data
    is synchronously passed down the pipeline (ending in a manifest

@@ -23,12 +23,14 @@ FD_PROTOTYPES_BEGIN
 
 fd_snapshot_name_t *
 fd_snapshot_name_from_cstr( fd_snapshot_name_t * id,
-                            char const *         cstr );
+                            char const *         cstr,
+                            ulong                base_slot );
 
 fd_snapshot_name_t *
 fd_snapshot_name_from_buf( fd_snapshot_name_t * id,
                            char const *         str,
-                           ulong                str_len );
+                           ulong                str_len,
+                           ulong                base_slot );
 
 /* fd_snapshot_load does a blocking load of a snapshot.
 

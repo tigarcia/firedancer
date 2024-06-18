@@ -44,6 +44,7 @@ fd_snapshot_http_t *
 fd_snapshot_http_new( void *               mem,
                       uint                 dst_ipv4,
                       ushort               dst_port,
+                      ulong                base_slot,
                       fd_snapshot_name_t * name_out ) {
 
   fd_snapshot_http_t * this = (fd_snapshot_http_t *)mem;
@@ -60,8 +61,9 @@ fd_snapshot_http_new( void *               mem,
   this->req_timeout = 10e9;  /* 10s */
   this->hops        = 5;
   this->name_out    = name_out;
-  if( !this->name_out ) this->name_out = this->name_dummy;  
+  if( !this->name_out ) this->name_out = this->name_dummy;
   fd_memset( this->name_out, 0, sizeof(fd_snapshot_name_t) );
+  this->base_slot   = base_slot;
 
   /* Right-aligned render the request path */
 
@@ -238,7 +240,7 @@ fd_snapshot_http_follow_redirect( fd_snapshot_http_t *      this,
 
   FD_LOG_NOTICE(( "Following redirect to %.*s", (int)loc_len, loc ));
 
-  if( FD_UNLIKELY( !fd_snapshot_name_from_buf( this->name_out, loc, loc_len ) ) ) {
+  if( FD_UNLIKELY( !fd_snapshot_name_from_buf( this->name_out, loc, loc_len, this->base_slot ) ) ) {
     return EPROTO;
   }
 
