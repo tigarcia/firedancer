@@ -30,6 +30,8 @@
 #pragma GCC diagnostic ignored "-Wformat"
 #pragma GCC diagnostic ignored "-Wformat-extra-args"
 
+#define TXNCACHE_TXNS_PER_SLOT  (FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT / 16)
+
 extern void fd_write_builtin_bogus_account( fd_exec_slot_ctx_t * slot_ctx, uchar const pubkey[ static 32 ], char const * data, ulong sz );
 
 static void usage( char const * progname ) {
@@ -902,8 +904,9 @@ replay( fd_ledger_args_t * args ) {
   fd_capture_ctx_t *    capture_ctx = NULL;
   FILE *                capture_file = NULL;
   
-  uchar * status_cache_mem = fd_wksp_alloc_laddr( wksp, fd_txncache_align(), fd_txncache_footprint(FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT), FD_TXNCACHE_MAGIC );
-  fd_txncache_t * status_cache = fd_txncache_join( fd_txncache_new( status_cache_mem, FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, FD_TXNCACHE_DEFAULT_MAX_TRANSACTIONS_PER_SLOT ) );
+  uchar * status_cache_mem = fd_wksp_alloc_laddr( wksp, fd_txncache_align(), fd_txncache_footprint(FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, TXNCACHE_TXNS_PER_SLOT), FD_TXNCACHE_MAGIC );
+  fd_txncache_t * status_cache = fd_txncache_join( fd_txncache_new( status_cache_mem, FD_TXNCACHE_DEFAULT_MAX_ROOTED_SLOTS, FD_TXNCACHE_DEFAULT_MAX_LIVE_SLOTS, TXNCACHE_TXNS_PER_SLOT ) );
+  FD_TEST(status_cache);
 
   /* Check number of records in funk. If rec_cnt == 0, then it can be assumed
      that you need to load in snapshot(s). */

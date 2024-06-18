@@ -325,7 +325,9 @@ fd_exec_slot_ctx_recover_status_cache( fd_exec_slot_ctx_t *    ctx,
     for( ulong i = 0; i < slot_deltas->slot_deltas_len; i++ ) {
       fd_slot_delta_t * slot_delta = &slot_deltas->slot_deltas[i];
       ulong slot = slot_delta->slot;
-
+      if( slot_delta->is_root ) {
+        fd_txncache_register_root_slot( ctx->status_cache, slot );
+      }
       for( ulong j = 0; j < slot_delta->slot_delta_vec_len; j++ ) {
         fd_status_pair_t * pair = &slot_delta->slot_delta_vec[j];
         fd_hash_t * blockhash = &pair->hash;
