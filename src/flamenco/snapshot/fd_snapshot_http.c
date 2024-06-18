@@ -120,6 +120,14 @@ fd_snapshot_http_init( fd_snapshot_http_t * this ) {
     return errno;
   }
 
+  int optval = 1<<21;
+  if( setsockopt( this->socket_fd, SOL_SOCKET, SO_RCVBUF, (char *)&optval, sizeof(int) ) < 0 ) {
+    FD_LOG_WARNING(( "setsockopt failed (%d-%s)",
+                     errno, fd_io_strerror( errno ) ));
+    this->state = FD_SNAPSHOT_HTTP_STATE_FAIL;
+    return errno;
+  }
+
   struct sockaddr_in addr = {
     .sin_family = AF_INET,
     .sin_addr   = { .s_addr = this->next_ipv4 },

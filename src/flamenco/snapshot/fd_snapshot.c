@@ -211,8 +211,9 @@ fd_snapshot_load( const char *         snapshotfile,
   fd_hash_t const * fhash = &name.fhash;
   fd_scratch_pop();
 
-  /* TODO verify that snapshot slot is correct
-     TODO verify that incremental has correct base (should probably do this earlier) */
+  if( name.type != snapshot_type ) {
+    FD_LOG_ERR(( "snapshot %s is wrong type", snapshotfile ));
+  }
 
   // In order to calculate the snapshot hash, we need to know what features are active...
   fd_features_restore( slot_ctx );
