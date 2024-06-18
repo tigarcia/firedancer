@@ -14,6 +14,71 @@
 #pragma GCC diagnostic ignored "-Wformat"
 #pragma GCC diagnostic ignored "-Wformat-extra-args"
 
+fd_snapshot_name_t *
+fd_snapshot_name_from_buf( fd_snapshot_name_t * id,
+                           char const *         str,
+                           ulong                str_len ) {
+  char buf[ 4096 ];
+  str_len = fd_ulong_min( sizeof(buf)-1, str_len );
+  fd_memcpy( buf, str, str_len );
+
+  return fd_snapshot_name_from_cstr( id, buf );
+}
+
+fd_snapshot_name_t *
+fd_snapshot_name_from_cstr( fd_snapshot_name_t * id,
+                          char const *         cstr ) {
+
+  fd_memset( id, 0, sizeof(fd_snapshot_name_t) );
+
+  char * last_slash = strrchr( cstr, '/' );
+  if( last_slash[0]=='/' ) cstr = last_slash + 1;
+
+  if( 0==strncmp( cstr, "snapshot-", sizeof("snapshot-")-1 ) ) {
+    cstr += sizeof("snapshot-")-1;
+    id->type = FD_SNAPSHOT_TYPE_FULL;
+  } else if( 0==strncmp( cstr, "incremental-snapshot-", sizeof("incremental-snapshot-")-1 ) ) {
+    cstr += sizeof("incremental-snapshot-")-1;
+    id->type = FD_SNAPSHOT_TYPE_INCREMENTAL;
+  } else {
+    FD_LOG_WARNING(( "unrecognized snapshot \"%s\"", cstr ));
+    return NULL;
+  }
+
+  char const * endptr = NULL;
+  id->slot = strtoul( cstr, fd_type_pun( &endptr ), 10 );
+  if( !endptr || endptr[0]!='-' ) {
+    FD_LOG_WARNING(( "invalid snapshot file name: \"%s\"", cstr ));
+    return NULL;
+  }
+  cstr = endptr+1;
+
+  if( id->type == FD_SNAPSHOT_TYPE_INCREMENTAL ) {
+    id->incremental_slot = strtoul( cstr, fd_type_pun( &endptr ), 10 );
+    if( !endptr || endptr[0]!='-' ) {
+      FD_LOG_WARNING(( "invalid snapshot file name: \"%s\"", cstr ));
+      return NULL;
+    }
+    cstr = endptr+1;
+  }
+
+  char const * file_ext = strchr( cstr, '.' );
+  ulong        file_ext_off = (ulong)( file_ext - cstr );
+
+  char hash_cstr[ FD_BASE58_ENCODED_32_SZ ] = {0};
+  strncpy( hash_cstr, cstr, sizeof(hash_cstr)-1 );
+  if( file_ext_off < sizeof(hash_cstr) ) {
+    hash_cstr[ file_ext_off ] = '\0';
+  }
+  strncpy( id->file_ext, file_ext, sizeof(id->file_ext)-1 );
+  
+  if( FD_UNLIKELY( !fd_base58_decode_32( hash_cstr, id->fhash.hash ) ) ) {
+    FD_LOG_WARNING(( "invalid snapshot file name: \"%s\"", cstr ));
+    return NULL;
+  }
+  return id;
+}
+
 static void
 fd_hashes_load(fd_exec_slot_ctx_t * slot_ctx) {
   FD_BORROWED_ACCOUNT_DECL(block_hashes_rec);
@@ -53,7 +118,7 @@ restore_manifest( void *                 ctx,
 static void
 load_one_snapshot( fd_exec_slot_ctx_t * slot_ctx,
                    char *               source_cstr,
-                   fd_hash_t *          fhash_out) {
+                   fd_snapshot_name_t * name_out ) {
 
   /* FIXME don't hardcode this param */
   static ulong const zstd_window_sz = 33554432UL;
@@ -91,7 +156,9 @@ load_one_snapshot( fd_exec_slot_ctx_t * slot_ctx,
     FD_LOG_ERR(( "Failed to load snapshot (%d-%s)", err, fd_io_strerror( err ) ));
   }
 
-  fd_snapshot_get_hash( loader, fhash_out );
+  fd_snapshot_name_t const * name = fd_snapshot_loader_get_name( loader );
+  if( FD_UNLIKELY( !name ) ) FD_LOG_ERR(( "name is NULL" ));
+  *name_out = *name;
 
   fd_valloc_free( valloc, fd_snapshot_loader_delete ( loader_mem  ) );
   fd_valloc_free( valloc, fd_snapshot_restore_delete( restore_mem ) );
@@ -131,9 +198,13 @@ fd_snapshot_load( const char *         snapshotfile,
   size_t slen = strlen( snapshotfile );
   char * snapshot_cstr = fd_scratch_alloc( 1UL, slen + 1 );
   fd_cstr_fini( fd_cstr_append_text( fd_cstr_init( snapshot_cstr ), snapshotfile, slen ) );
-  fd_hash_t fhash;
-  load_one_snapshot( slot_ctx, snapshot_cstr, &fhash );
+  fd_snapshot_name_t name = {0};
+  load_one_snapshot( slot_ctx, snapshot_cstr, &name );
+  fd_hash_t const * fhash = &name.fhash;
   fd_scratch_pop();
+
+  /* TODO verify that snapshot slot is correct
+     TODO verify that incremental has correct base (should probably do this earlier) */
 
   // In order to calculate the snapshot hash, we need to know what features are active...
   fd_features_restore( slot_ctx );
@@ -144,8 +215,8 @@ fd_snapshot_load( const char *         snapshotfile,
       fd_hash_t accounts_hash;
       fd_snapshot_hash(slot_ctx, &accounts_hash, child_txn, check_hash, 0);
 
-      if (memcmp(fhash.uc, accounts_hash.uc, 32) != 0)
-        FD_LOG_ERR(("snapshot accounts_hash %32J != %32J", accounts_hash.hash, fhash.uc));
+      if (memcmp(fhash->uc, accounts_hash.uc, 32) != 0)
+        FD_LOG_ERR(("snapshot accounts_hash %32J != %32J", accounts_hash.hash, fhash->uc));
       else
         FD_LOG_NOTICE(("snapshot accounts_hash %32J verified successfully", accounts_hash.hash));
     } else if (snapshot_type == FD_SNAPSHOT_TYPE_INCREMENTAL) {
@@ -159,8 +230,8 @@ fd_snapshot_load( const char *         snapshotfile,
         fd_snapshot_hash(slot_ctx, &accounts_hash, NULL, check_hash, 0);
       }
 
-      if (memcmp(fhash.uc, accounts_hash.uc, 32) != 0)
-        FD_LOG_ERR(("incremental accounts_hash %32J != %32J", accounts_hash.hash, fhash.uc));
+      if (memcmp(fhash->uc, accounts_hash.uc, 32) != 0)
+        FD_LOG_ERR(("incremental accounts_hash %32J != %32J", accounts_hash.hash, fhash->uc));
       else
         FD_LOG_NOTICE(("incremental accounts_hash %32J verified successfully", accounts_hash.hash));
     } else {

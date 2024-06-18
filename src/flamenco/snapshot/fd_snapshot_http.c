@@ -1,5 +1,6 @@
 #include "fd_snapshot_http.h"
 #include "../../ballet/http/picohttpparser.h"
+#include "fd_snapshot.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -40,9 +41,10 @@ fd_snapshot_http_set_path( fd_snapshot_http_t * this,
 }
 
 fd_snapshot_http_t *
-fd_snapshot_http_new( void * mem,
-                      uint   dst_ipv4,
-                      ushort dst_port ) {
+fd_snapshot_http_new( void *               mem,
+                      uint                 dst_ipv4,
+                      ushort               dst_port,
+                      fd_snapshot_name_t * name_out ) {
 
   fd_snapshot_http_t * this = (fd_snapshot_http_t *)mem;
   if( FD_UNLIKELY( !this ) ) {
@@ -57,6 +59,9 @@ fd_snapshot_http_new( void * mem,
   this->state       = FD_SNAPSHOT_HTTP_STATE_INIT;
   this->req_timeout = 10e9;  /* 10s */
   this->hops        = 5;
+  this->name_out    = name_out;
+  if( !this->name_out ) this->name_out = this->name_dummy;  
+  fd_memset( this->name_out, 0, sizeof(fd_snapshot_name_t) );
 
   /* Right-aligned render the request path */
 
@@ -233,6 +238,10 @@ fd_snapshot_http_follow_redirect( fd_snapshot_http_t *      this,
 
   FD_LOG_NOTICE(( "Following redirect to %.*s", (int)loc_len, loc ));
 
+  if( FD_UNLIKELY( !fd_snapshot_name_from_buf( this->name_out, loc, loc_len ) ) ) {
+    return EPROTO;
+  }
+
   int set_path_ok = fd_snapshot_http_set_path( this, loc, loc_len );
   assert( set_path_ok );
 
@@ -342,6 +351,12 @@ fd_snapshot_http_resp( fd_snapshot_http_t * this ) {
   }
 
   /* Start downloading */
+
+  if( FD_UNLIKELY( this->name_out->type == FD_SNAPSHOT_TYPE_UNSPECIFIED ) ) {
+    FD_LOG_WARNING(( "Cannot download, snapshot hash is unknown" ));
+    this->state = FD_SNAPSHOT_HTTP_STATE_FAIL;
+    return EINVAL;
+  }
 
   this->state = FD_SNAPSHOT_HTTP_STATE_DL;
   return 0;

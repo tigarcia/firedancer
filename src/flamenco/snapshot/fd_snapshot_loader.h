@@ -12,6 +12,7 @@
    The loader is currently a single-threaded streaming pipeline.  This
    is subject to change to the tile architecture in the future. */
 
+#include "../snapshot/fd_snapshot.h"
 #include "../snapshot/fd_snapshot_restore.h"
 
 /* fd_snapshot_loader_t manages file descriptors and buffers used during
@@ -85,18 +86,15 @@ fd_snapshot_loader_init( fd_snapshot_loader_t *    loader,
 int
 fd_snapshot_loader_advance( fd_snapshot_loader_t * loader );
 
+FD_FN_CONST fd_snapshot_name_t const *  /* nullable */
+fd_snapshot_loader_get_name( fd_snapshot_loader_t const * loader );
+
 /* fd_snapshot_src_parse determines the snapshot source from the given
    cstr. */
 
 fd_snapshot_src_t *
 fd_snapshot_src_parse( fd_snapshot_src_t * src,
                        char *              cstr );
-
-
-/* Extract the hash from the filename after loading */
-
-void
-fd_snapshot_get_hash( fd_snapshot_loader_t * loader, fd_hash_t * fhash_out );
 
 FD_PROTOTYPES_END
 

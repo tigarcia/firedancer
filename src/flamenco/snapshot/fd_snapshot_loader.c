@@ -1,4 +1,5 @@
 #include "fd_snapshot_loader.h"
+#include "fd_snapshot.h"
 #include "fd_snapshot_restore.h"
 #include "fd_snapshot_http.h"
 
@@ -40,7 +41,7 @@ struct fd_snapshot_loader {
 
   /* Hash from filename */
 
-  fd_hash_t fhash;
+  fd_snapshot_name_t name;
 };
 
 typedef struct fd_snapshot_loader fd_snapshot_loader_t;
@@ -120,25 +121,6 @@ fd_snapshot_loader_delete( fd_snapshot_loader_t * loader ) {
   return loader;
 }
 
-void
-fd_get_hash_from_filename( fd_snapshot_loader_t * d,
-                           const char *           snapshotfile ) {
-  ulong const slen = strlen(snapshotfile);
-  const char *hptr = &snapshotfile[slen - 1];
-  while ((hptr >= snapshotfile) && (*hptr != '-'))
-    hptr--;
-  hptr++;
-  char hash[100];
-  ulong const hlen = (size_t) ((&snapshotfile[slen - 1] - hptr) - 7);
-  if( hlen > sizeof(hash)-1U )
-    FD_LOG_ERR(( "invalid snapshot file %s", snapshotfile ));
-  memcpy(hash, hptr, hlen);
-  hash[hlen] = '\0';
-
-  if( FD_UNLIKELY( !fd_base58_decode_32( hash, d->fhash.uc ) ) )
-    FD_LOG_ERR(( "invalid snapshot hash" ));
-}
-
 fd_snapshot_loader_t *
 fd_snapshot_loader_init( fd_snapshot_loader_t *    d,
                          fd_snapshot_restore_t *   restore,
@@ -154,17 +136,19 @@ fd_snapshot_loader_init( fd_snapshot_loader_t *    d,
       return NULL;
     }
 
-    fd_get_hash_from_filename( d, src->file.path );
+    if( FD_UNLIKELY( !fd_snapshot_name_from_cstr( &d->name, src->file.path ) ) ) {
+      return NULL;
+    }
 
     if( FD_UNLIKELY( !fd_io_istream_file_new( d->vfile, d->snapshot_fd ) ) ) {
-      FD_LOG_WARNING(( "Failed to create fd_io_istream_file_t" ));
+      FD_LOG_WARNING(( "Failed to create fds_io_istream_file_t" ));
       return NULL;
     }
 
     d->vsrc = fd_io_istream_file_virtual( d->vfile );
     break;
   case FD_SNAPSHOT_SRC_HTTP:
-    if( FD_UNLIKELY( !fd_snapshot_http_new( d->vhttp, src->http.ip4, src->http.port ) ) ) {
+    if( FD_UNLIKELY( !fd_snapshot_http_new( d->vhttp, src->http.ip4, src->http.port, &d->name ) ) ) {
       FD_LOG_WARNING(( "Failed to create fd_snapshot_http_t" ));
       return NULL;
     }
@@ -312,7 +296,7 @@ fd_snapshot_src_parse( fd_snapshot_src_t * src,
   __builtin_unreachable();
 }
 
-void
-fd_snapshot_get_hash( fd_snapshot_loader_t * loader, fd_hash_t * fhash_out ) {
-  memcpy(fhash_out, &loader->fhash, sizeof(fd_hash_t));
+fd_snapshot_name_t const *  /* nullable */
+fd_snapshot_loader_get_name( fd_snapshot_loader_t const * loader ) {
+  return &loader->name;
 }

@@ -1,6 +1,7 @@
 #ifndef HEADER_fd_src_flamenco_snapshot_fd_snapshot_http_h
 #define HEADER_fd_src_flamenco_snapshot_fd_snapshot_http_h
 
+#include "fd_snapshot.h"
 #include "fd_snapshot_loader.h"
 #include "fd_snapshot_istream.h"
 
@@ -60,16 +61,24 @@ struct fd_snapshot_http {
   uchar resp_buf[ FD_SNAPSHOT_HTTP_RESP_BUF_MAX ];
   uint  resp_tail;
   uint  resp_head;
+
+  /* Name from last redirect */
+
+  fd_snapshot_name_t * name_out;
+  fd_snapshot_name_t   name_dummy[1];
 };
 
 typedef struct fd_snapshot_http fd_snapshot_http_t;
 
 FD_PROTOTYPES_BEGIN
 
+/* TODO support case without a redirect (need to parse file name ahead of time) */
+
 fd_snapshot_http_t *
-fd_snapshot_http_new( void * mem,
-                      uint   dst_ipv4,
-                      ushort dst_port );
+fd_snapshot_http_new( void *               mem,
+                      uint                 dst_ipv4,
+                      ushort               dst_port,
+                      fd_snapshot_name_t * name_out );
 
 void *
 fd_snapshot_http_delete( fd_snapshot_http_t * this );
