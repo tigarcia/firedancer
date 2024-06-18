@@ -50,9 +50,10 @@ restore_manifest( void *                 ctx,
   return (!!fd_exec_slot_ctx_recover( ctx, manifest ) ? 0 : EINVAL);
 }
 
-static fd_hash_t
+static void
 load_one_snapshot( fd_exec_slot_ctx_t * slot_ctx,
-                   char *               source_cstr ) {
+                   char *               source_cstr,
+                   fd_hash_t *          fhash_out) {
 
   /* FIXME don't hardcode this param */
   static ulong const zstd_window_sz = 33554432UL;
@@ -90,14 +91,12 @@ load_one_snapshot( fd_exec_slot_ctx_t * slot_ctx,
     FD_LOG_ERR(( "Failed to load snapshot (%d-%s)", err, fd_io_strerror( err ) ));
   }
 
-  fd_hash_t fhash = *fd_snapshot_get_hash( loader );
+  fd_snapshot_get_hash( loader, fhash_out );
 
   fd_valloc_free( valloc, fd_snapshot_loader_delete ( loader_mem  ) );
   fd_valloc_free( valloc, fd_snapshot_restore_delete( restore_mem ) );
 
   FD_LOG_NOTICE(( "Finished reading snapshot %s", source_cstr ));
-
-  return fhash;
 }
 
 
@@ -132,7 +131,8 @@ fd_snapshot_load( const char *         snapshotfile,
   size_t slen = strlen( snapshotfile );
   char * snapshot_cstr = fd_scratch_alloc( 1UL, slen + 1 );
   fd_cstr_fini( fd_cstr_append_text( fd_cstr_init( snapshot_cstr ), snapshotfile, slen ) );
-  fd_hash_t fhash = load_one_snapshot( slot_ctx, snapshot_cstr );
+  fd_hash_t fhash;
+  load_one_snapshot( slot_ctx, snapshot_cstr, &fhash );
   fd_scratch_pop();
 
   // In order to calculate the snapshot hash, we need to know what features are active...

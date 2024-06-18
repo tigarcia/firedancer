@@ -312,7 +312,7 @@ fd_snapshot_src_parse( fd_snapshot_src_t * src,
   __builtin_unreachable();
 }
 
-fd_hash_t *
-fd_snapshot_get_hash( fd_snapshot_loader_t * loader ) {
-  return &loader->fhash;
+void
+fd_snapshot_get_hash( fd_snapshot_loader_t * loader, fd_hash_t * fhash_out ) {
+  memcpy(fhash_out, &loader->fhash, sizeof(fd_hash_t));
 }

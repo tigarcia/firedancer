@@ -93,10 +93,10 @@ fd_snapshot_src_parse( fd_snapshot_src_t * src,
                        char *              cstr );
 
 
-/* Extract the hash from the filename */
+/* Extract the hash from the filename after loading */
 
-fd_hash_t *
-fd_snapshot_get_hash( fd_snapshot_loader_t * loader );
+void
+fd_snapshot_get_hash( fd_snapshot_loader_t * loader, fd_hash_t * fhash_out );
 
 FD_PROTOTYPES_END
 
