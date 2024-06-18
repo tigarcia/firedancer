@@ -226,6 +226,42 @@ struct gossip_deliver_arg {
 };
 typedef struct gossip_deliver_arg gossip_deliver_arg_t;
 
+struct vote_txn_sign_args {
+  const uchar * node_keypair;
+  const uchar * authorized_voter_keypair;
+};
+typedef struct vote_txn_sign_args vote_txn_sign_args_t;
+
+void
+vote_txn_node_signer( void *        _keys,
+                      uchar         signature[ static 64 ],
+                      uchar const * buffer,
+                      ulong         len ) {
+    fd_sha512_t sha;
+    vote_txn_sign_args_t * keys = (vote_txn_sign_args_t *) fd_type_pun( _keys );
+    fd_ed25519_sign( /* sig */ signature,
+                     /* msg */ buffer,
+                     /* sz  */ len,
+                     /* public_key  */ keys->node_keypair + 32UL,
+                     /* private_key */ keys->node_keypair,
+                     &sha );
+}
+
+void
+vote_txn_authorized_voter_signer( void *        _keys,
+                                  uchar         signature[ static 64 ],
+                                  uchar const * buffer,
+                                  ulong         len ) {
+    fd_sha512_t sha;
+    vote_txn_sign_args_t * keys = (vote_txn_sign_args_t *) fd_type_pun( _keys );
+    fd_ed25519_sign( /* sig */ signature,
+                     /* msg */ buffer,
+                     /* sz  */ len,
+                     /* public_key  */ keys->authorized_voter_keypair + 32UL,
+                     /* private_key */ keys->authorized_voter_keypair,
+                     &sha );
+}
+
 static void
 gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
   gossip_deliver_arg_t * arg_ = (gossip_deliver_arg_t *)arg;
@@ -258,10 +294,19 @@ gossip_deliver_fun( fd_crds_data_t * data, void * arg ) {
           vote_instr.inner.compact_update_vote_state.timestamp = &new_timestamp;
 
           /* Generate the vote transaction */
-          fd_voter_t voter = {
-            .vote_acct_addr           = arg_->vote_acct_addr,
-            .node_keypair             = arg_->node_keypair,
+          vote_txn_sign_args_t sign_args = {
+            .node_keypair = arg_->node_keypair,
             .authorized_voter_keypair = arg_->authorized_voter_keypair
+          };
+          fd_pubkey_t * node_pubkey = (fd_pubkey_t *)fd_type_pun_const( arg_->node_keypair + 32UL );
+          fd_pubkey_t * authorized_voter_pubkey = (fd_pubkey_t *)fd_type_pun_const( arg_->authorized_voter_keypair + 32UL );
+          fd_voter_t voter = {
+            .vote_acct_addr            = arg_->vote_acct_addr,
+            .node_pubkey               = node_pubkey,
+            .authorized_voter_pubkey   = authorized_voter_pubkey,
+            .voter_sign_arg            = &sign_args,
+            .node_sign_fun             = vote_txn_node_signer,
+            .authorized_voter_sign_fun = vote_txn_authorized_voter_signer
           };
           fd_crds_data_t echo_data;
           echo_data.discriminant          = fd_crds_data_enum_vote;
